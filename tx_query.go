@@ -10,7 +10,7 @@ import (
 
 	"github.com/dal-go/dalgo/dal"
 	"github.com/ingitdb/dalgo2ingitdb"
-	"github.com/ingitdb/ingitdb-go"
+	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
 // executeQueryToRecordsReader reads all records for the collection referenced by

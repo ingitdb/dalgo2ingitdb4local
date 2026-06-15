@@ -11,8 +11,8 @@ import (
 	"github.com/dal-go/dalgo/dal"
 	"github.com/pelletier/go-toml/v2"
 
-	"github.com/ingitdb/ingitdb-go"
-	"github.com/ingitdb/ingitdb-go/markdown"
+	"github.com/ingitdb/ingitdb-go/ingitdb"
+	"github.com/ingitdb/ingitdb-go/ingitdb/markdown"
 	"gopkg.in/yaml.v3"
 )
 

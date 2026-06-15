@@ -10,7 +10,7 @@ import (
 
 	"github.com/dal-go/dalgo/dal"
 
-	"github.com/ingitdb/ingitdb-go"
+	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
 // makeOrGroupCondition builds a dal.GroupCondition with operator=Or wrapping

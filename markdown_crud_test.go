@@ -11,7 +11,7 @@ import (
 
 	"github.com/dal-go/dalgo/dal"
 
-	"github.com/ingitdb/ingitdb-go"
+	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
 // makeMarkdownDef builds a Definition with one Markdown SingleRecord

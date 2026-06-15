@@ -9,7 +9,7 @@ import (
 	"github.com/dal-go/dalgo/dal"
 	"gopkg.in/yaml.v3"
 
-	"github.com/ingitdb/ingitdb-go"
+	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
 func TestGet_NilDefinition(t *testing.T) {

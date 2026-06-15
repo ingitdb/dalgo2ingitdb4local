@@ -8,7 +8,7 @@ import (
 
 	"github.com/dal-go/dalgo/dal"
 
-	"github.com/ingitdb/ingitdb-go"
+	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
 // makeFKTestDB builds a filesystem DB with a parent "users" collection and a

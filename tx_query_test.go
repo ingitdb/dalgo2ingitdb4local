@@ -8,7 +8,7 @@ import (
 
 	"github.com/dal-go/dalgo/dal"
 
-	"github.com/ingitdb/ingitdb-go"
+	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
 // makeQueryTestDef builds a SingleRecord YAML definition with name and score columns.

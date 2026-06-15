@@ -11,7 +11,7 @@ import (
 	"github.com/dal-go/dalgo/dal"
 	"gopkg.in/yaml.v3"
 
-	"github.com/ingitdb/ingitdb-go"
+	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
 // makeTestDef builds a minimal Definition with one SingleRecord YAML collection
