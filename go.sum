@@ -2,8 +2,7 @@ github.com/RoaringBitmap/roaring/v2 v2.18.2 h1:oPq3Cgx//iDuJQVp6xSInAKW34J9CEwE5
 github.com/RoaringBitmap/roaring/v2 v2.18.2/go.mod h1:eq4wdNXxtJIS/oikeCzdX1rBzek7ANzbth041hrU8Q4=
 github.com/bits-and-blooms/bitset v1.24.4 h1:95H15Og1clikBrKr/DuzMXkQzECs1M6hhoGXLwLQOZE=
 github.com/bits-and-blooms/bitset v1.24.4/go.mod h1:7hO7Gc7Pp1vODcmWvKMRA9BNmbv6a/7QIWpPxHddWR8=
-github.com/dal-go/dalgo v0.46.1 h1:evVl54N6bU2L4bHhNlnAzoBFgugZSqoPcLB6LiflcjM=
-github.com/dal-go/dalgo v0.46.1/go.mod h1:HHMUuCMutAlYEblDTVws7jeZs56jvOCbOuxVs6I01tE=
+github.com/dal-go/dalgo v0.62.2 h1:rA+k9QCgS0UnZV0oonvDtA+QoM3Wj1doVBWo1higBTw=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/gofrs/flock v0.13.0 h1:95JolYOvGMqeH31+FC7D2+uULf6mG61mEZ/A8dRYMzw=
@@ -36,8 +35,7 @@ github.com/strongo/validation v0.0.8 h1:LL3FODf1MTOROKa8fHJuwYxiKHcvd1W2Vs0OXc1H
 github.com/strongo/validation v0.0.8/go.mod h1:YUwoPEItLJd/Bc9X1OCUm03ofhvm3kwZvuihU7/jz58=
 go.starlark.net v0.0.0-20260613233743-8ba36ccb83fb h1:NGUBN0jbH0IR3msRslALnoxlySm+6YvVKvVDjdDJrlA=
 go.starlark.net v0.0.0-20260613233743-8ba36ccb83fb/go.mod h1:Iue6g6iirlfLoVi/DYCi5/x0h/bAOuWF3dULTKpt2Vo=
-golang.org/x/sys v0.42.0 h1:omrd2nAlyT5ESRdCLYdm3+fMfNFE/+Rf4bDIQImRJeo=
-golang.org/x/sys v0.42.0/go.mod h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw=
+golang.org/x/sys v0.45.0 h1:dO4czNzziLiiXplLQgBCEpCvXQ3dnkn0SdaZSYdQ+FY=
 google.golang.org/protobuf v1.36.11 h1:fV6ZwhNocDyBLK0dj+fg8ektcVegBBuEolpbTQyBNVE=
 google.golang.org/protobuf v1.36.11/go.mod h1:HTf+CrKn2C3g5S8VImy6tdcUvCska2kB7j23XfzDpco=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
