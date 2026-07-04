@@ -11,6 +11,7 @@ package dalgo2fsingitdb
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -178,5 +179,36 @@ func TestLocalDB_NestedKeys_ScopedByParentRecord(t *testing.T) {
 	}
 	if got := workRec.Data().(map[string]any)["name"]; got != "Bob" {
 		t.Errorf("work contact name: got %v, want Bob", got)
+	}
+
+	// Query the contacts subcollection scoped to spaces/family: it must see only
+	// the family contact, not spaces/work's. This proves the query READ path
+	// agrees with the scoped write path (no cross-parent leakage, no regression
+	// to a flat read).
+	familyContactsRef := dal.NewCollectionRef("contacts", "", dal.NewKeyWithID("spaces", "family"))
+	qb := dal.NewQueryBuilder(dal.From(familyContactsRef))
+	q := qb.SelectIntoRecord(func() dal.Record {
+		return dal.NewRecordWithData(dal.NewKeyWithID("contacts", ""), map[string]any{})
+	})
+	var names []string
+	if err := db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
+		reader, err := tx.ExecuteQueryToRecordsReader(ctx, q)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = reader.Close() }()
+		for {
+			rec, nextErr := reader.Next()
+			if nextErr != nil {
+				break
+			}
+			names = append(names, fmt.Sprintf("%v", rec.Data().(map[string]any)["name"]))
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("query spaces/family/contacts: %v", err)
+	}
+	if len(names) != 1 || names[0] != "Alice" {
+		t.Errorf("query of spaces/family/contacts = %v, want [Alice] (scoped read must not see other spaces)", names)
 	}
 }
