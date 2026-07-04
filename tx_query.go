@@ -113,9 +113,14 @@ func collectionFromQuery(def *ingitdb.Definition, query dal.Query) (*ingitdb.Col
 		return nil, fmt.Errorf("FROM source must be a CollectionRef, got %T", base)
 	}
 	collectionID := colRef.Name()
-	colDef, exists := def.Collections[collectionID]
-	if !exists {
-		return nil, fmt.Errorf("collection %q not found in definition", collectionID)
+	// A query over a nested subcollection carries its parent record key in the
+	// CollectionRef; resolveScopedCollection scopes the DirPath to that parent so
+	// the query reads only that parent's records (spaces/family/contacts/...),
+	// agreeing with the scoped write path. Top-level queries (parent == nil) are
+	// a flat lookup, unchanged.
+	colDef, err := resolveScopedCollection(def, collectionID, colRef.Parent())
+	if err != nil {
+		return nil, err
 	}
 	if colDef.RecordFile == nil {
 		return nil, fmt.Errorf("collection %q has no record_file definition", collectionID)
