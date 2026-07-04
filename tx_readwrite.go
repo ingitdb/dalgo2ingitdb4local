@@ -149,22 +149,6 @@ func (r readwriteTx) Insert(ctx context.Context, record dal.Record, opts ...dal.
 	}
 }
 
-func (r readwriteTx) resolveCollection(key *dal.Key) (*ingitdb.CollectionDef, string, error) {
-	if r.db.def == nil {
-		return nil, "", fmt.Errorf("definition is required: use NewLocalDBWithDef")
-	}
-	collectionID := key.Collection()
-	colDef, ok := r.db.def.Collections[collectionID]
-	if !ok {
-		return nil, "", fmt.Errorf("collection %q not found in definition", collectionID)
-	}
-	if colDef.RecordFile == nil {
-		return nil, "", fmt.Errorf("collection %q has no record_file definition", collectionID)
-	}
-	recordKey := fmt.Sprintf("%v", key.ID)
-	return colDef, recordKey, nil
-}
-
 func (r readwriteTx) InsertMulti(ctx context.Context, records []dal.Record, opts ...dal.InsertOption) error {
 	//TODO implement me
 	panic("implement me")
