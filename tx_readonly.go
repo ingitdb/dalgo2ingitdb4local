@@ -7,6 +7,7 @@ import (
 
 	"github.com/dal-go/dalgo/dal"
 	"github.com/dal-go/dalgo/recordset"
+	dalrecord "github.com/dal-go/record"
 	"github.com/ingitdb/dalgo2ingitdb"
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
@@ -22,7 +23,7 @@ func (r readonlyTx) Options() dal.TransactionOptions {
 	panic("implement me")
 }
 
-func (r readonlyTx) Get(ctx context.Context, record dal.Record) error {
+func (r readonlyTx) Get(ctx context.Context, record dalrecord.Record) error {
 	_ = ctx
 	colDef, recordKey, err := r.resolveCollection(record.Key())
 	if err != nil {
@@ -45,7 +46,7 @@ func (r readonlyTx) Get(ctx context.Context, record dal.Record) error {
 			return err
 		}
 		if !found {
-			record.SetError(dal.ErrRecordNotFound)
+			record.SetError(dalrecord.ErrRecordNotFound)
 			return nil
 		}
 		record.SetError(nil)
@@ -57,12 +58,12 @@ func (r readonlyTx) Get(ctx context.Context, record dal.Record) error {
 			return err
 		}
 		if !found {
-			record.SetError(dal.ErrRecordNotFound)
+			record.SetError(dalrecord.ErrRecordNotFound)
 			return nil
 		}
 		recordData, exists := allRecords[recordKey]
 		if !exists {
-			record.SetError(dal.ErrRecordNotFound)
+			record.SetError(dalrecord.ErrRecordNotFound)
 			return nil
 		}
 		record.SetError(nil)
@@ -79,7 +80,7 @@ func (r readonlyTx) Get(ctx context.Context, record dal.Record) error {
 // chain so nested records are physically scoped under their parent record
 // (spaces/family/contacts/...); for a top-level key (no parent) it is a plain
 // flat lookup, unchanged.
-func (r readonlyTx) resolveCollection(key *dal.Key) (*ingitdb.CollectionDef, string, error) {
+func (r readonlyTx) resolveCollection(key *dalrecord.Key) (*ingitdb.CollectionDef, string, error) {
 	if r.db.def == nil {
 		return nil, "", fmt.Errorf("definition is required: use NewLocalDBWithDef")
 	}
@@ -97,12 +98,12 @@ func (r readonlyTx) resolveCollection(key *dal.Key) (*ingitdb.CollectionDef, str
 	return colDef, recordKey, nil
 }
 
-func (r readonlyTx) Exists(ctx context.Context, key *dal.Key) (bool, error) {
+func (r readonlyTx) Exists(ctx context.Context, key *dalrecord.Key) (bool, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (r readonlyTx) GetMulti(ctx context.Context, records []dal.Record) error {
+func (r readonlyTx) GetMulti(ctx context.Context, records []dalrecord.Record) error {
 	//TODO implement me
 	panic("implement me")
 }

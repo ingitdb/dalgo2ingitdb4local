@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/dal-go/dalgo/dal"
+	dalrecord "github.com/dal-go/record"
 
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
@@ -36,8 +37,8 @@ func peopleComputedDef(dirPath string) *ingitdb.Definition {
 
 func peopleQuery() dal.Query {
 	return dal.NewQueryBuilder(dal.From(dal.NewRootCollectionRef("people", ""))).
-		SelectIntoRecord(func() dal.Record {
-			return dal.NewRecordWithData(dal.NewKeyWithID("people", ""), map[string]any{})
+		SelectIntoRecord(func() dalrecord.Record {
+			return dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("people", ""), map[string]any{})
 		})
 }
 
@@ -114,8 +115,8 @@ func TestExecuteQueryToRecordsetReader_MapOfRecords_Computed(t *testing.T) {
 
 	db := openTestDB(t, dir, def)
 	query := dal.NewQueryBuilder(dal.From(dal.NewRootCollectionRef("scores", ""))).
-		SelectIntoRecord(func() dal.Record {
-			return dal.NewRecordWithData(dal.NewKeyWithID("scores", ""), map[string]any{})
+		SelectIntoRecord(func() dalrecord.Record {
+			return dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("scores", ""), map[string]any{})
 		})
 	err := db.RunReadonlyTransaction(context.Background(), func(ctx context.Context, tx dal.ReadTransaction) error {
 		reader, qerr := tx.ExecuteQueryToRecordsetReader(ctx, query)
@@ -147,8 +148,8 @@ func TestExecuteQueryToRecordsetReader_UnknownCollection(t *testing.T) {
 	def := peopleComputedDef(dir)
 	db := openTestDB(t, dir, def)
 	query := dal.NewQueryBuilder(dal.From(dal.NewRootCollectionRef("nope", ""))).
-		SelectIntoRecord(func() dal.Record {
-			return dal.NewRecordWithData(dal.NewKeyWithID("nope", ""), map[string]any{})
+		SelectIntoRecord(func() dalrecord.Record {
+			return dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("nope", ""), map[string]any{})
 		})
 	err := db.RunReadonlyTransaction(context.Background(), func(ctx context.Context, tx dal.ReadTransaction) error {
 		_, qerr := tx.ExecuteQueryToRecordsetReader(ctx, query)

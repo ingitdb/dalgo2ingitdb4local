@@ -9,6 +9,7 @@ import (
 	"unsafe"
 
 	"github.com/dal-go/dalgo/dal"
+	dalrecord "github.com/dal-go/record"
 
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
@@ -192,8 +193,8 @@ func TestEvaluateGroupCondition_AND(t *testing.T) {
 	qb := dal.NewQueryBuilder(dal.From(dal.NewRootCollectionRef("test.items", "")))
 	qb.WhereField("name", dal.Equal, "Alice")
 	qb.WhereField("score", dal.GreaterThen, float64(70))
-	q := qb.SelectIntoRecord(func() dal.Record {
-		return dal.NewRecordWithData(dal.NewKeyWithID("test.items", ""), map[string]any{})
+	q := qb.SelectIntoRecord(func() dalrecord.Record {
+		return dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.items", ""), map[string]any{})
 	})
 
 	var keys []string
@@ -330,8 +331,8 @@ func TestEvaluateComparison_Operators(t *testing.T) {
 			t.Parallel()
 			qb := dal.NewQueryBuilder(dal.From(dal.NewRootCollectionRef("test.items", "")))
 			qb.WhereField("score", tc.operator, tc.value)
-			q := qb.SelectIntoRecord(func() dal.Record {
-				return dal.NewRecordWithData(dal.NewKeyWithID("test.items", ""), map[string]any{})
+			q := qb.SelectIntoRecord(func() dalrecord.Record {
+				return dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.items", ""), map[string]any{})
 			})
 			var count int
 			err := db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
@@ -461,8 +462,8 @@ func TestReadAllMapOfRecords_Query(t *testing.T) {
 	ctx := context.Background()
 
 	qb := dal.NewQueryBuilder(dal.From(dal.NewRootCollectionRef("test.tags", "")))
-	q := qb.SelectIntoRecord(func() dal.Record {
-		return dal.NewRecordWithData(dal.NewKeyWithID("test.tags", ""), map[string]any{})
+	q := qb.SelectIntoRecord(func() dalrecord.Record {
+		return dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.tags", ""), map[string]any{})
 	})
 
 	var count int
@@ -513,8 +514,8 @@ func TestReadAllMapOfRecords_EmptyFile(t *testing.T) {
 	ctx := context.Background()
 
 	qb := dal.NewQueryBuilder(dal.From(dal.NewRootCollectionRef("test.tags", "")))
-	q := qb.SelectIntoRecord(func() dal.Record {
-		return dal.NewRecordWithData(dal.NewKeyWithID("test.tags", ""), map[string]any{})
+	q := qb.SelectIntoRecord(func() dalrecord.Record {
+		return dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.tags", ""), map[string]any{})
 	})
 
 	var count int
@@ -563,8 +564,8 @@ func TestReadAllRecordsFromDisk_UnsupportedRecordType(t *testing.T) {
 	ctx := context.Background()
 
 	qb := dal.NewQueryBuilder(dal.From(dal.NewRootCollectionRef("test.items", "")))
-	q := qb.SelectIntoRecord(func() dal.Record {
-		return dal.NewRecordWithData(dal.NewKeyWithID("test.items", ""), map[string]any{})
+	q := qb.SelectIntoRecord(func() dalrecord.Record {
+		return dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.items", ""), map[string]any{})
 	})
 	err := db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		_, err := tx.ExecuteQueryToRecordsReader(ctx, q)
@@ -663,8 +664,8 @@ func TestExecuteQueryToRecordsReader_NilDef(t *testing.T) {
 	ctx := context.Background()
 
 	qb := dal.NewQueryBuilder(dal.From(dal.NewRootCollectionRef("test.items", "")))
-	q := qb.SelectIntoRecord(func() dal.Record {
-		return dal.NewRecordWithData(dal.NewKeyWithID("test.items", ""), map[string]any{})
+	q := qb.SelectIntoRecord(func() dalrecord.Record {
+		return dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.items", ""), map[string]any{})
 	})
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		_, err := tx.ExecuteQueryToRecordsReader(ctx, q)
@@ -720,8 +721,8 @@ func TestExecuteQueryToRecordsReader_OrderByID(t *testing.T) {
 	// Order by $id ascending.
 	qb := dal.NewQueryBuilder(dal.From(dal.NewRootCollectionRef("test.items", "")))
 	qb.OrderBy(dal.AscendingField("$id"))
-	q := qb.SelectIntoRecord(func() dal.Record {
-		return dal.NewRecordWithData(dal.NewKeyWithID("test.items", ""), map[string]any{})
+	q := qb.SelectIntoRecord(func() dalrecord.Record {
+		return dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.items", ""), map[string]any{})
 	})
 
 	var keys []string
@@ -980,8 +981,8 @@ func TestExecuteQueryToRecordsReader_NilRecordFile(t *testing.T) {
 	ctx := context.Background()
 
 	qb := dal.NewQueryBuilder(dal.From(dal.NewRootCollectionRef("test.items", "")))
-	q := qb.SelectIntoRecord(func() dal.Record {
-		return dal.NewRecordWithData(dal.NewKeyWithID("test.items", ""), map[string]any{})
+	q := qb.SelectIntoRecord(func() dalrecord.Record {
+		return dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.items", ""), map[string]any{})
 	})
 	err := db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		_, err := tx.ExecuteQueryToRecordsReader(ctx, q)
@@ -1020,8 +1021,8 @@ func TestReadAllMapOfRecords_ReadError(t *testing.T) {
 	ctx := context.Background()
 
 	qb := dal.NewQueryBuilder(dal.From(dal.NewRootCollectionRef("test.tags", "")))
-	q := qb.SelectIntoRecord(func() dal.Record {
-		return dal.NewRecordWithData(dal.NewKeyWithID("test.tags", ""), map[string]any{})
+	q := qb.SelectIntoRecord(func() dalrecord.Record {
+		return dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.tags", ""), map[string]any{})
 	})
 	err := db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		_, err := tx.ExecuteQueryToRecordsReader(ctx, q)
@@ -1056,8 +1057,8 @@ func TestReadAllSingleRecords_GlobError(t *testing.T) {
 	ctx := context.Background()
 
 	qb := dal.NewQueryBuilder(dal.From(dal.NewRootCollectionRef("test.items", "")))
-	q := qb.SelectIntoRecord(func() dal.Record {
-		return dal.NewRecordWithData(dal.NewKeyWithID("test.items", ""), map[string]any{})
+	q := qb.SelectIntoRecord(func() dalrecord.Record {
+		return dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.items", ""), map[string]any{})
 	})
 	err := db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		_, err := tx.ExecuteQueryToRecordsReader(ctx, q)
@@ -1089,8 +1090,8 @@ func TestReadAllSingleRecords_RecordReadError(t *testing.T) {
 	ctx := context.Background()
 
 	qb := dal.NewQueryBuilder(dal.From(dal.NewRootCollectionRef("test.items", "")))
-	q := qb.SelectIntoRecord(func() dal.Record {
-		return dal.NewRecordWithData(dal.NewKeyWithID("test.items", ""), map[string]any{})
+	q := qb.SelectIntoRecord(func() dalrecord.Record {
+		return dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.items", ""), map[string]any{})
 	})
 	err := db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		_, err := tx.ExecuteQueryToRecordsReader(ctx, q)
@@ -1121,8 +1122,8 @@ func TestExecuteQueryToRecordsReader_WhereConditionError(t *testing.T) {
 	// Use an unsupported operator to trigger evaluateComparison error.
 	qb := dal.NewQueryBuilder(dal.From(dal.NewRootCollectionRef("test.items", "")))
 	qb.WhereField("name", "INVALID_OP", "A")
-	q := qb.SelectIntoRecord(func() dal.Record {
-		return dal.NewRecordWithData(dal.NewKeyWithID("test.items", ""), map[string]any{})
+	q := qb.SelectIntoRecord(func() dalrecord.Record {
+		return dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.items", ""), map[string]any{})
 	})
 	err := db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		_, err := tx.ExecuteQueryToRecordsReader(ctx, q)
@@ -1158,8 +1159,8 @@ func TestExecuteQueryToRecordsReader_OrderByEqualValues(t *testing.T) {
 	// Order by score (ties), then by name (breaks tie).
 	qb := dal.NewQueryBuilder(dal.From(dal.NewRootCollectionRef("test.items", "")))
 	qb.OrderBy(dal.AscendingField("score"), dal.AscendingField("name"))
-	q := qb.SelectIntoRecord(func() dal.Record {
-		return dal.NewRecordWithData(dal.NewKeyWithID("test.items", ""), map[string]any{})
+	q := qb.SelectIntoRecord(func() dalrecord.Record {
+		return dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.items", ""), map[string]any{})
 	})
 
 	var keys []string
@@ -1210,8 +1211,8 @@ func TestExecuteQueryToRecordsReader_OrderByAllEqual(t *testing.T) {
 
 	qb := dal.NewQueryBuilder(dal.From(dal.NewRootCollectionRef("test.items", "")))
 	qb.OrderBy(dal.AscendingField("score"), dal.AscendingField("name"))
-	q := qb.SelectIntoRecord(func() dal.Record {
-		return dal.NewRecordWithData(dal.NewKeyWithID("test.items", ""), map[string]any{})
+	q := qb.SelectIntoRecord(func() dalrecord.Record {
+		return dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.items", ""), map[string]any{})
 	})
 
 	var count int
@@ -1258,8 +1259,8 @@ func TestExecuteQueryToRecordsReader_OrderByNonFieldRef(t *testing.T) {
 	// Order by a Constant (non-FieldRef) expression — will be skipped.
 	qb := dal.NewQueryBuilder(dal.From(dal.NewRootCollectionRef("test.items", "")))
 	qb.OrderBy(dal.Ascending(dal.NewConstant(1)))
-	q := qb.SelectIntoRecord(func() dal.Record {
-		return dal.NewRecordWithData(dal.NewKeyWithID("test.items", ""), map[string]any{})
+	q := qb.SelectIntoRecord(func() dalrecord.Record {
+		return dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.items", ""), map[string]any{})
 	})
 
 	var count int
@@ -1331,10 +1332,10 @@ type nilFromQuery struct {
 func (nilFromQuery) From() dal.FromSource           { return nil }
 func (nilFromQuery) Where() dal.Condition           { return nil }
 func (nilFromQuery) GroupBy() []dal.Expression      { return nil }
-func (nilFromQuery) Having() dal.Condition           { return nil }
+func (nilFromQuery) Having() dal.Condition          { return nil }
 func (nilFromQuery) OrderBy() []dal.OrderExpression { return nil }
 func (nilFromQuery) Columns() []dal.Column          { return nil }
-func (nilFromQuery) IntoRecord() dal.Record         { return nil }
+func (nilFromQuery) IntoRecord() dalrecord.Record   { return nil }
 func (nilFromQuery) IDKind() reflect.Kind           { return reflect.String }
 func (nilFromQuery) StartFrom() dal.Cursor          { return "" }
 
@@ -1383,8 +1384,8 @@ func TestExecuteQueryToRecordsReader_WhereByID(t *testing.T) {
 	// WHERE $id = "a" — exercises the $id FieldRef branch in resolveExpression.
 	qb := dal.NewQueryBuilder(dal.From(dal.NewRootCollectionRef("test.items", "")))
 	qb.WhereField("$id", dal.Equal, "a")
-	q := qb.SelectIntoRecord(func() dal.Record {
-		return dal.NewRecordWithData(dal.NewKeyWithID("test.items", ""), map[string]any{})
+	q := qb.SelectIntoRecord(func() dalrecord.Record {
+		return dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.items", ""), map[string]any{})
 	})
 
 	var keys []string
@@ -1434,8 +1435,8 @@ func TestReadAllSingleRecords_DanglingSymlink(t *testing.T) {
 	ctx := context.Background()
 
 	qb := dal.NewQueryBuilder(dal.From(dal.NewRootCollectionRef("test.items", "")))
-	q := qb.SelectIntoRecord(func() dal.Record {
-		return dal.NewRecordWithData(dal.NewKeyWithID("test.items", ""), map[string]any{})
+	q := qb.SelectIntoRecord(func() dalrecord.Record {
+		return dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.items", ""), map[string]any{})
 	})
 
 	var count int
@@ -1489,10 +1490,10 @@ type nonCollectionRefFromQuery struct {
 func (nonCollectionRefFromQuery) From() dal.FromSource           { return wrappedFromSource{} }
 func (nonCollectionRefFromQuery) Where() dal.Condition           { return nil }
 func (nonCollectionRefFromQuery) GroupBy() []dal.Expression      { return nil }
-func (nonCollectionRefFromQuery) Having() dal.Condition           { return nil }
+func (nonCollectionRefFromQuery) Having() dal.Condition          { return nil }
 func (nonCollectionRefFromQuery) OrderBy() []dal.OrderExpression { return nil }
 func (nonCollectionRefFromQuery) Columns() []dal.Column          { return nil }
-func (nonCollectionRefFromQuery) IntoRecord() dal.Record         { return nil }
+func (nonCollectionRefFromQuery) IntoRecord() dalrecord.Record   { return nil }
 func (nonCollectionRefFromQuery) IDKind() reflect.Kind           { return reflect.String }
 func (nonCollectionRefFromQuery) StartFrom() dal.Cursor          { return "" }
 
@@ -1541,8 +1542,8 @@ func TestReadAllSingleRecords_EmptyKey(t *testing.T) {
 	ctx := context.Background()
 
 	qb := dal.NewQueryBuilder(dal.From(dal.NewRootCollectionRef("test.items", "")))
-	q := qb.SelectIntoRecord(func() dal.Record {
-		return dal.NewRecordWithData(dal.NewKeyWithID("test.items", ""), map[string]any{})
+	q := qb.SelectIntoRecord(func() dalrecord.Record {
+		return dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.items", ""), map[string]any{})
 	})
 
 	var count int

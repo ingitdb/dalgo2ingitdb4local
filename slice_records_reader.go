@@ -1,18 +1,21 @@
 package dalgo2fsingitdb
 
-import "github.com/dal-go/dalgo/dal"
+import (
+	"github.com/dal-go/dalgo/dal"
+	dalrecord "github.com/dal-go/record"
+)
 
 // sliceRecordsReader implements dal.RecordsReader over a pre-loaded slice of records.
 type sliceRecordsReader struct {
-	records []dal.Record
+	records []dalrecord.Record
 	index   int
 }
 
-func newSliceRecordsReader(records []dal.Record) dal.RecordsReader {
+func newSliceRecordsReader(records []dalrecord.Record) dal.RecordsReader {
 	return &sliceRecordsReader{records: records}
 }
 
-func (r *sliceRecordsReader) Next() (dal.Record, error) {
+func (r *sliceRecordsReader) Next() (dalrecord.Record, error) {
 	if r.index >= len(r.records) {
 		return nil, dal.ErrNoMoreRecords
 	}

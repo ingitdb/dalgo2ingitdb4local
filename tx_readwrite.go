@@ -7,7 +7,8 @@ import (
 	"os"
 
 	"github.com/dal-go/dalgo/dal"
-	"github.com/dal-go/dalgo/update"
+	dalrecord "github.com/dal-go/record"
+	"github.com/dal-go/record/update"
 	"github.com/ingitdb/dalgo2ingitdb"
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
@@ -23,14 +24,17 @@ func (r readwriteTx) ID() string {
 	panic("implement me")
 }
 
-func (r readwriteTx) Set(ctx context.Context, record dal.Record) error {
+func (r readwriteTx) Set(ctx context.Context, record dalrecord.Record) error {
 	_ = ctx
 	colDef, recordKey, err := r.resolveCollection(record.Key())
 	if err != nil {
 		return err
 	}
 	record.SetError(nil)
-	data := record.Data().(map[string]any)
+	data, err := dalrecord.DataToMap(record.Data())
+	if err != nil {
+		return err
+	}
 	if err := dalgo2ingitdb.ValidateWrite(r.db.def, "Set", colDef.ID, colDef, recordKey, data); err != nil {
 		return err
 	}
@@ -54,12 +58,12 @@ func (r readwriteTx) Set(ctx context.Context, record dal.Record) error {
 	}
 }
 
-func (r readwriteTx) SetMulti(ctx context.Context, records []dal.Record) error {
+func (r readwriteTx) SetMulti(ctx context.Context, records []dalrecord.Record) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (r readwriteTx) Delete(ctx context.Context, key *dal.Key) error {
+func (r readwriteTx) Delete(ctx context.Context, key *dalrecord.Key) error {
 	_ = ctx
 	colDef, recordKey, err := r.resolveCollection(key)
 	if err != nil {
@@ -76,10 +80,10 @@ func (r readwriteTx) Delete(ctx context.Context, key *dal.Key) error {
 			return err
 		}
 		if !found {
-			return dal.ErrRecordNotFound
+			return dalrecord.ErrRecordNotFound
 		}
 		if _, exists := allRecords[recordKey]; !exists {
-			return dal.ErrRecordNotFound
+			return dalrecord.ErrRecordNotFound
 		}
 		delete(allRecords, recordKey)
 		return writeMapOfRecordsFile(path, colDef, allRecords)
@@ -88,34 +92,37 @@ func (r readwriteTx) Delete(ctx context.Context, key *dal.Key) error {
 	}
 }
 
-func (r readwriteTx) DeleteMulti(ctx context.Context, keys []*dal.Key) error {
+func (r readwriteTx) DeleteMulti(ctx context.Context, keys []*dalrecord.Key) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (r readwriteTx) Update(ctx context.Context, key *dal.Key, updates []update.Update, preconditions ...dal.Precondition) error {
+func (r readwriteTx) Update(ctx context.Context, key *dalrecord.Key, updates []update.Update, preconditions ...dal.Precondition) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (r readwriteTx) UpdateRecord(ctx context.Context, record dal.Record, updates []update.Update, preconditions ...dal.Precondition) error {
+func (r readwriteTx) UpdateRecord(ctx context.Context, record dalrecord.Record, updates []update.Update, preconditions ...dal.Precondition) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (r readwriteTx) UpdateMulti(ctx context.Context, keys []*dal.Key, updates []update.Update, preconditions ...dal.Precondition) error {
+func (r readwriteTx) UpdateMulti(ctx context.Context, keys []*dalrecord.Key, updates []update.Update, preconditions ...dal.Precondition) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (r readwriteTx) Insert(ctx context.Context, record dal.Record, opts ...dal.InsertOption) error {
+func (r readwriteTx) Insert(ctx context.Context, record dalrecord.Record, opts ...dal.InsertOption) error {
 	_, _ = ctx, opts
 	colDef, recordKey, err := r.resolveCollection(record.Key())
 	if err != nil {
 		return err
 	}
 	record.SetError(nil)
-	data := record.Data().(map[string]any)
+	data, err := dalrecord.DataToMap(record.Data())
+	if err != nil {
+		return err
+	}
 	if err := dalgo2ingitdb.ValidateWrite(r.db.def, "Insert", colDef.ID, colDef, recordKey, data); err != nil {
 		return err
 	}
@@ -149,7 +156,7 @@ func (r readwriteTx) Insert(ctx context.Context, record dal.Record, opts ...dal.
 	}
 }
 
-func (r readwriteTx) InsertMulti(ctx context.Context, records []dal.Record, opts ...dal.InsertOption) error {
+func (r readwriteTx) InsertMulti(ctx context.Context, records []dalrecord.Record, opts ...dal.InsertOption) error {
 	//TODO implement me
 	panic("implement me")
 }

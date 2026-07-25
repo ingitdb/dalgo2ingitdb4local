@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/dal-go/dalgo/dal"
+	dalrecord "github.com/dal-go/record"
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
@@ -28,7 +28,7 @@ import (
 //
 // A top-level collection (parent == nil) resolves exactly as before: a flat
 // lookup in def.Collections with the schema-declared DirPath untouched.
-func resolveScopedCollection(def *ingitdb.Definition, collection string, parent *dal.Key) (*ingitdb.CollectionDef, error) {
+func resolveScopedCollection(def *ingitdb.Definition, collection string, parent *dalrecord.Key) (*ingitdb.CollectionDef, error) {
 	if def == nil {
 		return nil, fmt.Errorf("definition is required: use NewLocalDBWithDef")
 	}

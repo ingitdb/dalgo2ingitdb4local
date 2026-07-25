@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/dal-go/dalgo/dal"
+	dalrecord "github.com/dal-go/record"
 
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
@@ -59,8 +60,8 @@ func TestTOML_InsertGet(t *testing.T) {
 		"active": true,
 		"date":   "2024-01-01",
 	}
-	key := dal.NewKeyWithID("test.items", "acme")
-	record := dal.NewRecordWithData(key, data)
+	key := dalrecord.NewKeyWithID("test.items", "acme")
+	record := dalrecord.NewRecordWithData(key, data)
 
 	ctx := context.Background()
 	err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
@@ -85,7 +86,7 @@ func TestTOML_InsertGet(t *testing.T) {
 
 	// Read back via DALgo.
 	readData := map[string]any{}
-	readRecord := dal.NewRecordWithData(dal.NewKeyWithID("test.items", "acme"), readData)
+	readRecord := dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.items", "acme"), readData)
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, readRecord)
 	})
@@ -119,7 +120,7 @@ func TestTOML_Update(t *testing.T) {
 	db := openTestDB(t, dir, def)
 
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.items", "x")
+	key := dalrecord.NewKeyWithID("test.items", "x")
 	initial := map[string]any{
 		"name":   "Original",
 		"score":  int64(1),
@@ -127,7 +128,7 @@ func TestTOML_Update(t *testing.T) {
 		"date":   "2024-01-01",
 	}
 	err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		return tx.Insert(ctx, dal.NewRecordWithData(key, initial))
+		return tx.Insert(ctx, dalrecord.NewRecordWithData(key, initial))
 	})
 	if err != nil {
 		t.Fatalf("Insert: %v", err)
@@ -135,7 +136,7 @@ func TestTOML_Update(t *testing.T) {
 
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		cur := map[string]any{}
-		rec := dal.NewRecordWithData(key, cur)
+		rec := dalrecord.NewRecordWithData(key, cur)
 		if getErr := tx.Get(ctx, rec); getErr != nil {
 			return getErr
 		}
@@ -148,7 +149,7 @@ func TestTOML_Update(t *testing.T) {
 	}
 
 	readData := map[string]any{}
-	readRec := dal.NewRecordWithData(dal.NewKeyWithID("test.items", "x"), readData)
+	readRec := dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.items", "x"), readData)
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, readRec)
 	})
@@ -170,10 +171,10 @@ func TestTOML_Delete(t *testing.T) {
 	db := openTestDB(t, dir, def)
 
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.items", "doomed")
+	key := dalrecord.NewKeyWithID("test.items", "doomed")
 	data := map[string]any{"name": "Doomed", "score": int64(0), "active": false, "date": "2024-01-01"}
 	err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		return tx.Insert(ctx, dal.NewRecordWithData(key, data))
+		return tx.Insert(ctx, dalrecord.NewRecordWithData(key, data))
 	})
 	if err != nil {
 		t.Fatalf("Insert: %v", err)
@@ -194,7 +195,7 @@ func TestTOML_Delete(t *testing.T) {
 		t.Errorf("expected file gone after Delete, stat err: %v", statErr)
 	}
 
-	readRec := dal.NewRecordWithData(dal.NewKeyWithID("test.items", "doomed"), map[string]any{})
+	readRec := dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.items", "doomed"), map[string]any{})
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, readRec)
 	})
@@ -219,10 +220,10 @@ func TestTOML_TimeField_RoundTrip(t *testing.T) {
 		"active": true,
 		"date":   when,
 	}
-	key := dal.NewKeyWithID("test.items", "timed")
+	key := dalrecord.NewKeyWithID("test.items", "timed")
 	ctx := context.Background()
 	if err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		return tx.Insert(ctx, dal.NewRecordWithData(key, data))
+		return tx.Insert(ctx, dalrecord.NewRecordWithData(key, data))
 	}); err != nil {
 		t.Fatalf("Insert: %v", err)
 	}
@@ -237,7 +238,7 @@ func TestTOML_TimeField_RoundTrip(t *testing.T) {
 	}
 
 	readData := map[string]any{}
-	readRec := dal.NewRecordWithData(dal.NewKeyWithID("test.items", "timed"), readData)
+	readRec := dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.items", "timed"), readData)
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, readRec)
 	})

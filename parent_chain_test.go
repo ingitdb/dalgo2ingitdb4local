@@ -1,7 +1,7 @@
 package dalgo2fsingitdb
 
 // parent_chain_test.go is the regression suite for the per-parent ("per-space")
-// scoping fix. Before the fix the adapter mapped a dal.Key to an on-disk path
+// scoping fix. Before the fix the adapter mapped a dalrecord.Key to an on-disk path
 // using only the leaf collection + record id, dropping the parent chain, so two
 // keys sharing a leaf (contacts/c1) under different parents (spaces/family vs
 // spaces/work) collided on one file and clobbered each other. After the fix each
@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/dal-go/dalgo/dal"
+	dalrecord "github.com/dal-go/record"
 
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
@@ -62,8 +63,8 @@ func TestResolveScopedCollection_DistinctPathsForSameLeaf(t *testing.T) {
 	root := "/repo"
 	def := spacesWithContactsSubDef(root)
 
-	familyKey := dal.NewKeyWithParentAndID(dal.NewKeyWithID("spaces", "family"), "contacts", "c1")
-	workKey := dal.NewKeyWithParentAndID(dal.NewKeyWithID("spaces", "work"), "contacts", "c1")
+	familyKey := dalrecord.NewKeyWithParentAndID(dalrecord.NewKeyWithID("spaces", "family"), "contacts", "c1")
+	workKey := dalrecord.NewKeyWithParentAndID(dalrecord.NewKeyWithID("spaces", "work"), "contacts", "c1")
 
 	familyDef, err := resolveScopedCollection(def, familyKey.Collection(), familyKey.Parent())
 	if err != nil {
@@ -90,7 +91,7 @@ func TestResolveScopedCollection_DistinctPathsForSameLeaf(t *testing.T) {
 	}
 
 	// Unknown subcollection under a known parent → clear error.
-	if _, err := resolveScopedCollection(def, "widgets", dal.NewKeyWithID("spaces", "family")); err == nil ||
+	if _, err := resolveScopedCollection(def, "widgets", dalrecord.NewKeyWithID("spaces", "family")); err == nil ||
 		!strings.Contains(err.Error(), "not found in definition") {
 		t.Errorf("unknown subcollection: got %v, want 'not found in definition'", err)
 	}
@@ -111,7 +112,7 @@ func TestResolveScopedCollection_DeepNesting(t *testing.T) {
 	def := &ingitdb.Definition{Collections: map[string]*ingitdb.CollectionDef{"spaces": spaces}}
 
 	// key: spaces/s1/projects/p1/tasks/t1
-	parent := dal.NewKeyWithParentAndID(dal.NewKeyWithParentAndID(dal.NewKeyWithID("spaces", "s1"), "projects", "p1"), "tasks", "t1").Parent()
+	parent := dalrecord.NewKeyWithParentAndID(dalrecord.NewKeyWithParentAndID(dalrecord.NewKeyWithID("spaces", "s1"), "projects", "p1"), "tasks", "t1").Parent()
 	colDef, err := resolveScopedCollection(def, "tasks", parent)
 	if err != nil {
 		t.Fatalf("resolveScopedCollection: %v", err)
@@ -122,7 +123,7 @@ func TestResolveScopedCollection_DeepNesting(t *testing.T) {
 	}
 
 	// Unknown intermediate subcollection under a known parent → error.
-	badParent := dal.NewKeyWithParentAndID(dal.NewKeyWithID("spaces", "s1"), "unknown", "x")
+	badParent := dalrecord.NewKeyWithParentAndID(dalrecord.NewKeyWithID("spaces", "s1"), "unknown", "x")
 	if _, err := resolveScopedCollection(def, "tasks", badParent); err == nil ||
 		!strings.Contains(err.Error(), "not found in definition") {
 		t.Errorf("unknown intermediate: got %v, want 'not found in definition'", err)
@@ -141,14 +142,14 @@ func TestLocalDB_NestedKeys_ScopedByParentRecord(t *testing.T) {
 	db := openTestDB(t, root, spacesWithContactsSubDef(root))
 	ctx := context.Background()
 
-	familyContact := dal.NewKeyWithParentAndID(dal.NewKeyWithID("spaces", "family"), "contacts", "c1")
-	workContact := dal.NewKeyWithParentAndID(dal.NewKeyWithID("spaces", "work"), "contacts", "c1")
+	familyContact := dalrecord.NewKeyWithParentAndID(dalrecord.NewKeyWithID("spaces", "family"), "contacts", "c1")
+	workContact := dalrecord.NewKeyWithParentAndID(dalrecord.NewKeyWithID("spaces", "work"), "contacts", "c1")
 
 	if err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		if setErr := tx.Set(ctx, dal.NewRecordWithData(familyContact, map[string]any{"name": "Alice"})); setErr != nil {
+		if setErr := tx.Set(ctx, dalrecord.NewRecordWithData(familyContact, map[string]any{"name": "Alice"})); setErr != nil {
 			return setErr
 		}
-		return tx.Set(ctx, dal.NewRecordWithData(workContact, map[string]any{"name": "Bob"}))
+		return tx.Set(ctx, dalrecord.NewRecordWithData(workContact, map[string]any{"name": "Bob"}))
 	}); err != nil {
 		t.Fatalf("write nested contacts: %v", err)
 	}
@@ -164,8 +165,8 @@ func TestLocalDB_NestedKeys_ScopedByParentRecord(t *testing.T) {
 	}
 
 	// Read each back; confirm they did NOT clobber each other.
-	famRec := dal.NewRecordWithData(familyContact, map[string]any{})
-	workRec := dal.NewRecordWithData(workContact, map[string]any{})
+	famRec := dalrecord.NewRecordWithData(familyContact, map[string]any{})
+	workRec := dalrecord.NewRecordWithData(workContact, map[string]any{})
 	if err := db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		if getErr := tx.Get(ctx, famRec); getErr != nil {
 			return getErr
@@ -185,10 +186,10 @@ func TestLocalDB_NestedKeys_ScopedByParentRecord(t *testing.T) {
 	// the family contact, not spaces/work's. This proves the query READ path
 	// agrees with the scoped write path (no cross-parent leakage, no regression
 	// to a flat read).
-	familyContactsRef := dal.NewCollectionRef("contacts", "", dal.NewKeyWithID("spaces", "family"))
+	familyContactsRef := dal.NewCollectionRef("contacts", "", dalrecord.NewKeyWithID("spaces", "family"))
 	qb := dal.NewQueryBuilder(dal.From(familyContactsRef))
-	q := qb.SelectIntoRecord(func() dal.Record {
-		return dal.NewRecordWithData(dal.NewKeyWithID("contacts", ""), map[string]any{})
+	q := qb.SelectIntoRecord(func() dalrecord.Record {
+		return dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("contacts", ""), map[string]any{})
 	})
 	var names []string
 	if err := db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {

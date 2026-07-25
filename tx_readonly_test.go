@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dal-go/dalgo/dal"
+	dalrecord "github.com/dal-go/record"
 )
 
 func TestReadonlyTx_Panics(t *testing.T) {
@@ -12,8 +12,8 @@ func TestReadonlyTx_Panics(t *testing.T) {
 
 	tx := readonlyTx{db: localDB{rootDirPath: "/tmp/root"}}
 	ctx := context.Background()
-	var key *dal.Key
-	var records []dal.Record
+	var key *dalrecord.Key
+	var records []dalrecord.Record
 
 	tests := []struct {
 		name string
