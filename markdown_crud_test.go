@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/dal-go/dalgo/dal"
+	dalrecord "github.com/dal-go/record"
 
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
@@ -66,8 +67,8 @@ func TestMarkdown_InsertGet_DefaultContentField(t *testing.T) {
 		"tags":                              "intro",
 		ingitdb.DefaultMarkdownContentField: body,
 	}
-	key := dal.NewKeyWithID("test.notes", "first")
-	record := dal.NewRecordWithData(key, data)
+	key := dalrecord.NewKeyWithID("test.notes", "first")
+	record := dalrecord.NewRecordWithData(key, data)
 
 	ctx := context.Background()
 	err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
@@ -96,7 +97,7 @@ func TestMarkdown_InsertGet_DefaultContentField(t *testing.T) {
 
 	// Read back via DALgo.
 	readData := map[string]any{}
-	readRecord := dal.NewRecordWithData(dal.NewKeyWithID("test.notes", "first"), readData)
+	readRecord := dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.notes", "first"), readData)
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, readRecord)
 	})
@@ -129,8 +130,8 @@ func TestMarkdown_InsertGet_CustomContentField(t *testing.T) {
 		"title": "Custom",
 		"body":  bodyText,
 	}
-	key := dal.NewKeyWithID("test.notes", "custom")
-	record := dal.NewRecordWithData(key, data)
+	key := dalrecord.NewKeyWithID("test.notes", "custom")
+	record := dalrecord.NewRecordWithData(key, data)
 
 	ctx := context.Background()
 	err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
@@ -160,7 +161,7 @@ func TestMarkdown_InsertGet_CustomContentField(t *testing.T) {
 
 	// Read back: "body" is populated, default $content is absent.
 	readData := map[string]any{}
-	readRecord := dal.NewRecordWithData(dal.NewKeyWithID("test.notes", "custom"), readData)
+	readRecord := dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.notes", "custom"), readData)
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, readRecord)
 	})
@@ -183,13 +184,13 @@ func TestMarkdown_Update(t *testing.T) {
 	db := openTestDB(t, dir, def)
 
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.notes", "updateme")
+	key := dalrecord.NewKeyWithID("test.notes", "updateme")
 	initial := map[string]any{
 		"title":                             "Original",
 		ingitdb.DefaultMarkdownContentField: "Original body.\n",
 	}
 	err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		return tx.Insert(ctx, dal.NewRecordWithData(key, initial))
+		return tx.Insert(ctx, dalrecord.NewRecordWithData(key, initial))
 	})
 	if err != nil {
 		t.Fatalf("Insert: %v", err)
@@ -198,7 +199,7 @@ func TestMarkdown_Update(t *testing.T) {
 	// Update: change title, leave body unchanged.
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		current := map[string]any{}
-		rec := dal.NewRecordWithData(key, current)
+		rec := dalrecord.NewRecordWithData(key, current)
 		if getErr := tx.Get(ctx, rec); getErr != nil {
 			return getErr
 		}
@@ -211,7 +212,7 @@ func TestMarkdown_Update(t *testing.T) {
 
 	// Verify.
 	readData := map[string]any{}
-	readRecord := dal.NewRecordWithData(dal.NewKeyWithID("test.notes", "updateme"), readData)
+	readRecord := dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.notes", "updateme"), readData)
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, readRecord)
 	})
@@ -234,13 +235,13 @@ func TestMarkdown_Delete(t *testing.T) {
 	db := openTestDB(t, dir, def)
 
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.notes", "todelete")
+	key := dalrecord.NewKeyWithID("test.notes", "todelete")
 	data := map[string]any{
 		"title":                             "Doomed",
 		ingitdb.DefaultMarkdownContentField: "Soon to be deleted.\n",
 	}
 	err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		return tx.Insert(ctx, dal.NewRecordWithData(key, data))
+		return tx.Insert(ctx, dalrecord.NewRecordWithData(key, data))
 	})
 	if err != nil {
 		t.Fatalf("Insert: %v", err)
@@ -264,7 +265,7 @@ func TestMarkdown_Delete(t *testing.T) {
 
 	// Get on a deleted record: tx.Get returns no transport error, but the
 	// record's Exists() reports false (DALgo's not-found convention).
-	readRecord := dal.NewRecordWithData(dal.NewKeyWithID("test.notes", "todelete"), map[string]any{})
+	readRecord := dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.notes", "todelete"), map[string]any{})
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, readRecord)
 	})
@@ -293,10 +294,10 @@ func TestMarkdown_TimeField_RoundTrip(t *testing.T) {
 		"date":                              when,
 		ingitdb.DefaultMarkdownContentField: "Body.\n",
 	}
-	key := dal.NewKeyWithID("test.notes", "timed")
+	key := dalrecord.NewKeyWithID("test.notes", "timed")
 	ctx := context.Background()
 	err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		return tx.Insert(ctx, dal.NewRecordWithData(key, data))
+		return tx.Insert(ctx, dalrecord.NewRecordWithData(key, data))
 	})
 	if err != nil {
 		t.Fatalf("Insert: %v", err)
@@ -314,7 +315,7 @@ func TestMarkdown_TimeField_RoundTrip(t *testing.T) {
 
 	// Read back: yaml.v3 parses the bare timestamp back into a time.Time.
 	readData := map[string]any{}
-	readRecord := dal.NewRecordWithData(dal.NewKeyWithID("test.notes", "timed"), readData)
+	readRecord := dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.notes", "timed"), readData)
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, readRecord)
 	})
@@ -347,7 +348,7 @@ func TestMarkdown_UndeclaredFrontmatterKeysIgnored(t *testing.T) {
 
 	db := openTestDB(t, dir, def)
 	readData := map[string]any{}
-	readRecord := dal.NewRecordWithData(dal.NewKeyWithID("test.notes", "handauthored"), readData)
+	readRecord := dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.notes", "handauthored"), readData)
 	err := db.RunReadonlyTransaction(context.Background(), func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, readRecord)
 	})
@@ -428,8 +429,8 @@ func TestMarkdown_ExcludeRegex_QuerySkipsMatching(t *testing.T) {
 
 	ctx := context.Background()
 	// Insert a real record.
-	realKey := dal.NewKeyWithID("test.notes", "real")
-	realRec := dal.NewRecordWithData(realKey, map[string]any{
+	realKey := dalrecord.NewKeyWithID("test.notes", "real")
+	realRec := dalrecord.NewRecordWithData(realKey, map[string]any{
 		"title":                             "Real note",
 		ingitdb.DefaultMarkdownContentField: "body\n",
 	})
@@ -447,8 +448,8 @@ func TestMarkdown_ExcludeRegex_QuerySkipsMatching(t *testing.T) {
 	}
 
 	qb := dal.NewQueryBuilder(dal.From(dal.NewRootCollectionRef("test.notes", "")))
-	q := qb.SelectIntoRecord(func() dal.Record {
-		return dal.NewRecordWithData(dal.NewKeyWithID("test.notes", ""), map[string]any{})
+	q := qb.SelectIntoRecord(func() dalrecord.Record {
+		return dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.notes", ""), map[string]any{})
 	})
 	var count int
 	err := db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {

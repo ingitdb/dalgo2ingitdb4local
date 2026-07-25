@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/dal-go/dalgo/dal"
+	dalrecord "github.com/dal-go/record"
 	"github.com/ingitdb/dalgo2ingitdb"
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
@@ -129,8 +130,8 @@ func collectionFromQuery(def *ingitdb.Definition, query dal.Query) (*ingitdb.Col
 }
 
 // readAllRecordsFromDisk loads every record in colDef from the filesystem and
-// eagerly bakes computed columns into each returned dal.Record.
-func readAllRecordsFromDisk(colDef *ingitdb.CollectionDef) ([]dal.Record, error) {
+// eagerly bakes computed columns into each returned dalrecord.Record.
+func readAllRecordsFromDisk(colDef *ingitdb.CollectionDef) ([]dalrecord.Record, error) {
 	switch colDef.RecordFile.RecordType {
 	case ingitdb.SingleRecord:
 		return readAllSingleRecords(colDef)
@@ -142,8 +143,8 @@ func readAllRecordsFromDisk(colDef *ingitdb.CollectionDef) ([]dal.Record, error)
 }
 
 // readAllSingleRecords reads every single-record file and bakes computed
-// columns into each returned dal.Record.
-func readAllSingleRecords(colDef *ingitdb.CollectionDef) ([]dal.Record, error) {
+// columns into each returned dalrecord.Record.
+func readAllSingleRecords(colDef *ingitdb.CollectionDef) ([]dalrecord.Record, error) {
 	stored, err := readAllSingleStored(colDef)
 	if err != nil {
 		return nil, err
@@ -152,8 +153,8 @@ func readAllSingleRecords(colDef *ingitdb.CollectionDef) ([]dal.Record, error) {
 }
 
 // readAllMapOfRecords reads a map-of-records file and bakes computed columns
-// into each returned dal.Record.
-func readAllMapOfRecords(colDef *ingitdb.CollectionDef) ([]dal.Record, error) {
+// into each returned dalrecord.Record.
+func readAllMapOfRecords(colDef *ingitdb.CollectionDef) ([]dalrecord.Record, error) {
 	stored, err := readAllMapStored(colDef)
 	if err != nil {
 		return nil, err
@@ -169,15 +170,15 @@ func readAllMapOfRecords(colDef *ingitdb.CollectionDef) ([]dal.Record, error) {
 // retained for the write-time computed-foreign-key validation (Set/Delete),
 // which is explicitly out of scope for the lazy migration and must keep
 // evaluating computed FK columns to enforce referential integrity.
-func bakeStoredRecords(colDef *ingitdb.CollectionDef, stored []dalgo2ingitdb.KeyedStored) ([]dal.Record, error) {
-	records := make([]dal.Record, 0, len(stored))
+func bakeStoredRecords(colDef *ingitdb.CollectionDef, stored []dalgo2ingitdb.KeyedStored) ([]dalrecord.Record, error) {
+	records := make([]dalrecord.Record, 0, len(stored))
 	for _, s := range stored {
 		computed, computeErr := dalgo2ingitdb.ApplyFormulasToRead(s.Stored, colDef.Columns, colDef.ID, s.Key)
 		if computeErr != nil {
 			return nil, computeErr
 		}
-		key := dal.NewKeyWithID(colDef.ID, s.Key)
-		rec := dal.NewRecordWithData(key, computed)
+		key := dalrecord.NewKeyWithID(colDef.ID, s.Key)
+		rec := dalrecord.NewRecordWithData(key, computed)
 		rec.SetError(nil)
 		records = append(records, rec)
 	}

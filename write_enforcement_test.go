@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/dal-go/dalgo/dal"
+	dalrecord "github.com/dal-go/record"
 
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
@@ -47,14 +48,14 @@ func makeFKTestDB(t *testing.T, childColumns map[string]*ingitdb.ColumnDef) dal.
 func insertRecord(t *testing.T, db dal.DB, collection, key string, data map[string]any) error {
 	t.Helper()
 	return db.RunReadwriteTransaction(context.Background(), func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		return tx.Insert(ctx, dal.NewRecordWithData(dal.NewKeyWithID(collection, key), data))
+		return tx.Insert(ctx, dalrecord.NewRecordWithData(dalrecord.NewKeyWithID(collection, key), data))
 	})
 }
 
 func deleteRecord(t *testing.T, db dal.DB, collection, key string) error {
 	t.Helper()
 	return db.RunReadwriteTransaction(context.Background(), func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		return tx.Delete(ctx, dal.NewKeyWithID(collection, key))
+		return tx.Delete(ctx, dalrecord.NewKeyWithID(collection, key))
 	})
 }
 
@@ -138,7 +139,7 @@ func TestFSSet_StoredForeignKeyMissingParentFails(t *testing.T) {
 	t.Parallel()
 	db := makeFKTestDB(t, storedFKColumns)
 	err := db.RunReadwriteTransaction(context.Background(), func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		return tx.Set(ctx, dal.NewRecordWithData(dal.NewKeyWithID("things", "thing-1"), map[string]any{"name": "T", "owner": "user-absent"}))
+		return tx.Set(ctx, dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("things", "thing-1"), map[string]any{"name": "T", "owner": "user-absent"}))
 	})
 	requireErrContains(t, err, "things", "owner", "users")
 }

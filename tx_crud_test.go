@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/dal-go/dalgo/dal"
+	dalrecord "github.com/dal-go/record"
 	"gopkg.in/yaml.v3"
 
 	"github.com/ingitdb/ingitdb-go/ingitdb"
@@ -71,9 +72,9 @@ func TestGet_SingleRecord_Found(t *testing.T) {
 
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.items", "abc")
+	key := dalrecord.NewKeyWithID("test.items", "abc")
 	data := map[string]any{}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err := db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, record)
@@ -96,9 +97,9 @@ func TestGet_SingleRecord_NotFound(t *testing.T) {
 	def := makeTestDef(t, dir)
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.items", "missing")
+	key := dalrecord.NewKeyWithID("test.items", "missing")
 	data := map[string]any{}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err := db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, record)
@@ -118,9 +119,9 @@ func TestInsert_SingleRecord(t *testing.T) {
 	def := makeTestDef(t, dir)
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.items", "new")
+	key := dalrecord.NewKeyWithID("test.items", "new")
 	data := map[string]any{"name": "New Item"}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Insert(ctx, record)
@@ -163,9 +164,9 @@ func TestInsert_SingleRecord_KeySubdirPattern(t *testing.T) {
 	}
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.items", "de")
+	key := dalrecord.NewKeyWithID("test.items", "de")
 	data := map[string]any{"name": "Germany"}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Insert(ctx, record)
@@ -200,9 +201,9 @@ func TestInsert_SingleRecord_AlreadyExists(t *testing.T) {
 
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.items", "dup")
+	key := dalrecord.NewKeyWithID("test.items", "dup")
 	data := map[string]any{"name": "Duplicate"}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Insert(ctx, record)
@@ -219,9 +220,9 @@ func TestSet_SingleRecord(t *testing.T) {
 	def := makeTestDef(t, dir)
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.items", "upsert")
+	key := dalrecord.NewKeyWithID("test.items", "upsert")
 	data := map[string]any{"name": "Upserted"}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Set(ctx, record)
@@ -257,7 +258,7 @@ func TestDelete_SingleRecord(t *testing.T) {
 
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.items", "del")
+	key := dalrecord.NewKeyWithID("test.items", "del")
 
 	err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Delete(ctx, key)
@@ -277,12 +278,12 @@ func TestDelete_SingleRecord_NotFound(t *testing.T) {
 	def := makeTestDef(t, dir)
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.items", "ghost")
+	key := dalrecord.NewKeyWithID("test.items", "ghost")
 
 	err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Delete(ctx, key)
 	})
-	if !errors.Is(err, dal.ErrRecordNotFound) {
+	if !errors.Is(err, dalrecord.ErrRecordNotFound) {
 		t.Fatalf("expected ErrRecordNotFound, got %v", err)
 	}
 }
@@ -335,9 +336,9 @@ func TestGet_MapOfRecords_Found(t *testing.T) {
 
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.tags", "work")
+	key := dalrecord.NewKeyWithID("test.tags", "work")
 	data := map[string]any{}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err := db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, record)
@@ -374,9 +375,9 @@ func TestGet_MapOfRecords_KeyNotFound(t *testing.T) {
 
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.tags", "missing")
+	key := dalrecord.NewKeyWithID("test.tags", "missing")
 	data := map[string]any{}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err := db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, record)
@@ -396,9 +397,9 @@ func TestGet_MapOfRecords_FileNotFound(t *testing.T) {
 	def := makeMapOfIDDef(t, dir)
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.tags", "work")
+	key := dalrecord.NewKeyWithID("test.tags", "work")
 	data := map[string]any{}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err := db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, record)
@@ -418,12 +419,12 @@ func TestInsert_MapOfRecords(t *testing.T) {
 	def := makeMapOfIDDef(t, dir)
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.tags", "work")
+	key := dalrecord.NewKeyWithID("test.tags", "work")
 	data := map[string]any{
 		"title":  "Work",
 		"titles": map[string]any{"ru": "Работа"},
 	}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Insert(ctx, record)
@@ -466,9 +467,9 @@ func TestInsert_MapOfRecords_TitleOnly(t *testing.T) {
 	def := makeMapOfIDDef(t, dir)
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.tags", "solo")
+	key := dalrecord.NewKeyWithID("test.tags", "solo")
 	data := map[string]any{"title": "Solo"}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Insert(ctx, record)
@@ -504,12 +505,12 @@ func TestInsert_MapOfRecords_PrimaryLocaleInTitlesNormalized(t *testing.T) {
 	def := makeMapOfIDDef(t, dir)
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.tags", "norm")
+	key := dalrecord.NewKeyWithID("test.tags", "norm")
 	// User supplies primary locale inside titles map — should be promoted to title.
 	data := map[string]any{
 		"titles": map[string]any{"en": "Norm", "ru": "Норм"},
 	}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Insert(ctx, record)
@@ -556,9 +557,9 @@ func TestInsert_MapOfRecords_AlreadyExists(t *testing.T) {
 
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.tags", "work")
+	key := dalrecord.NewKeyWithID("test.tags", "work")
 	data := map[string]any{"title": "Work Again"}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Insert(ctx, record)
@@ -579,12 +580,12 @@ func TestSet_MapOfRecords(t *testing.T) {
 
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.tags", "home")
+	key := dalrecord.NewKeyWithID("test.tags", "home")
 	data := map[string]any{
 		"title":  "Home",
 		"titles": map[string]any{"ru": "Дом"},
 	}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Set(ctx, record)
@@ -635,7 +636,7 @@ func TestDelete_MapOfRecords(t *testing.T) {
 
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.tags", "work")
+	key := dalrecord.NewKeyWithID("test.tags", "work")
 
 	err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Delete(ctx, key)
@@ -671,12 +672,12 @@ func TestDelete_MapOfRecords_KeyNotFound(t *testing.T) {
 
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.tags", "ghost")
+	key := dalrecord.NewKeyWithID("test.tags", "ghost")
 
 	err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Delete(ctx, key)
 	})
-	if !errors.Is(err, dal.ErrRecordNotFound) {
+	if !errors.Is(err, dalrecord.ErrRecordNotFound) {
 		t.Fatalf("expected ErrRecordNotFound, got %v", err)
 	}
 }
@@ -688,12 +689,12 @@ func TestDelete_MapOfRecords_FileNotFound(t *testing.T) {
 	def := makeMapOfIDDef(t, dir)
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.tags", "work")
+	key := dalrecord.NewKeyWithID("test.tags", "work")
 
 	err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Delete(ctx, key)
 	})
-	if !errors.Is(err, dal.ErrRecordNotFound) {
+	if !errors.Is(err, dalrecord.ErrRecordNotFound) {
 		t.Fatalf("expected ErrRecordNotFound, got %v", err)
 	}
 }

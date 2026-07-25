@@ -5,25 +5,26 @@ import (
 
 	"github.com/dal-go/dalgo/dal"
 	"github.com/dal-go/dalgo/recordset"
+	dalrecord "github.com/dal-go/record"
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
-var _ dal.DB = (*localDB)(nil)
+var _ dal.Backend = (*localDB)(nil)
 
 func NewLocalDB(rootDirPath string) (dal.DB, error) {
 	// TODO: rootDirPath should point to existing directory
-	return &localDB{
+	return dal.NewDB(&localDB{
 		rootDirPath: rootDirPath,
-	}, nil
+	}), nil
 }
 
 // NewLocalDBWithDef creates a localDB with a preloaded schema definition.
 // The definition enables CRUD operations that require collection metadata.
 func NewLocalDBWithDef(rootDirPath string, def *ingitdb.Definition) (dal.DB, error) {
-	return &localDB{
+	return dal.NewDB(&localDB{
 		rootDirPath: rootDirPath,
 		def:         def,
-	}, nil
+	}), nil
 }
 
 type localDB struct {
@@ -61,17 +62,17 @@ func (db localDB) RunReadwriteTransaction(ctx context.Context, f dal.RWTxWorker,
 	return f(ctx, tx)
 }
 
-func (db localDB) Get(ctx context.Context, record dal.Record) error {
+func (db localDB) Get(ctx context.Context, record dalrecord.Record) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (db localDB) Exists(ctx context.Context, key *dal.Key) (bool, error) {
+func (db localDB) Exists(ctx context.Context, key *dalrecord.Key) (bool, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (db localDB) GetMulti(ctx context.Context, records []dal.Record) error {
+func (db localDB) GetMulti(ctx context.Context, records []dalrecord.Record) error {
 	//TODO implement me
 	panic("implement me")
 }

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/dal-go/dalgo/dal"
+	dalrecord "github.com/dal-go/record"
 	"gopkg.in/yaml.v3"
 
 	"github.com/ingitdb/ingitdb-go/ingitdb"
@@ -22,9 +23,9 @@ func TestGet_NilDefinition(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.items", "abc")
+	key := dalrecord.NewKeyWithID("test.items", "abc")
 	data := map[string]any{}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, record)
@@ -61,9 +62,9 @@ func TestGet_CollectionNotFound(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	key := dal.NewKeyWithID("nonexistent.collection", "abc")
+	key := dalrecord.NewKeyWithID("nonexistent.collection", "abc")
 	data := map[string]any{}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, record)
@@ -100,9 +101,9 @@ func TestGet_UnsupportedRecordType(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.items", "abc")
+	key := dalrecord.NewKeyWithID("test.items", "abc")
 	data := map[string]any{}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, record)
@@ -128,7 +129,7 @@ func TestResolveCollection_NilDefinition(t *testing.T) {
 		},
 	}
 
-	key := dal.NewKeyWithID("test.items", "abc")
+	key := dalrecord.NewKeyWithID("test.items", "abc")
 	_, _, err := tx.resolveCollection(key)
 	if err == nil {
 		t.Fatal("expected error for nil definition, got nil")
@@ -160,7 +161,7 @@ func TestResolveCollection_CollectionNotFound(t *testing.T) {
 		},
 	}
 
-	key := dal.NewKeyWithID("nonexistent.collection", "abc")
+	key := dalrecord.NewKeyWithID("nonexistent.collection", "abc")
 	_, _, err := tx.resolveCollection(key)
 	if err == nil {
 		t.Fatal("expected error for nonexistent collection, got nil")
@@ -193,7 +194,7 @@ func TestResolveCollection_NilRecordFile(t *testing.T) {
 		},
 	}
 
-	key := dal.NewKeyWithID("test.items", "abc")
+	key := dalrecord.NewKeyWithID("test.items", "abc")
 	_, _, err := tx.resolveCollection(key)
 	if err == nil {
 		t.Fatal("expected error for nil RecordFile, got nil")
@@ -214,9 +215,9 @@ func TestSet_WithResolveError(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.items", "abc")
+	key := dalrecord.NewKeyWithID("test.items", "abc")
 	data := map[string]any{"name": "Test"}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Set(ctx, record)
@@ -240,7 +241,7 @@ func TestDelete_WithResolveError(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.items", "abc")
+	key := dalrecord.NewKeyWithID("test.items", "abc")
 
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Delete(ctx, key)
@@ -264,9 +265,9 @@ func TestInsert_WithResolveError(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.items", "abc")
+	key := dalrecord.NewKeyWithID("test.items", "abc")
 	data := map[string]any{"name": "Test"}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Insert(ctx, record)
@@ -302,9 +303,9 @@ func TestInsert_SingleRecord_StatError(t *testing.T) {
 
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.items", "blocking") // key "blocking" -> file "blocking.yaml"
+	key := dalrecord.NewKeyWithID("test.items", "blocking") // key "blocking" -> file "blocking.yaml"
 	data := map[string]any{"name": "Test"}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Insert(ctx, record)
@@ -333,9 +334,9 @@ func TestSet_MapOfRecords_ReadError(t *testing.T) {
 
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.tags", "work")
+	key := dalrecord.NewKeyWithID("test.tags", "work")
 	data := map[string]any{"title": "Work"}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Set(ctx, record)
@@ -353,9 +354,9 @@ func TestSet_MapOfRecords_EmptyFile(t *testing.T) {
 	db := openTestDB(t, dir, def)
 
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.tags", "work")
+	key := dalrecord.NewKeyWithID("test.tags", "work")
 	data := map[string]any{"title": "Work"}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Set(ctx, record)
@@ -390,9 +391,9 @@ func TestGet_SingleRecord_ReadError(t *testing.T) {
 
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.items", "bad")
+	key := dalrecord.NewKeyWithID("test.items", "bad")
 	data := map[string]any{}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, record)
@@ -420,9 +421,9 @@ func TestGet_MapOfRecords_ReadError(t *testing.T) {
 
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.tags", "work")
+	key := dalrecord.NewKeyWithID("test.tags", "work")
 	data := map[string]any{}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, record)
@@ -448,9 +449,9 @@ func TestGet_MapOfRecords_InvalidRecordInFile(t *testing.T) {
 
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.tags", "work")
+	key := dalrecord.NewKeyWithID("test.tags", "work")
 	data := map[string]any{}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, record)
@@ -475,9 +476,9 @@ func TestInsert_MapOfRecords_ReadError(t *testing.T) {
 
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.tags", "work")
+	key := dalrecord.NewKeyWithID("test.tags", "work")
 	data := map[string]any{"title": "Work"}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Insert(ctx, record)
@@ -502,7 +503,7 @@ func TestDelete_MapOfRecords_ReadError(t *testing.T) {
 
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.tags", "work")
+	key := dalrecord.NewKeyWithID("test.tags", "work")
 
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Delete(ctx, key)
@@ -666,9 +667,9 @@ func TestInsert_SingleRecord_StatPermissionError(t *testing.T) {
 
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.items", "test")
+	key := dalrecord.NewKeyWithID("test.items", "test")
 	data := map[string]any{"name": "Test"}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 
 	err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Insert(ctx, record)

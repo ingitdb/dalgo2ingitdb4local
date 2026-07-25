@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dal-go/dalgo/dal"
+	dalrecord "github.com/dal-go/record"
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/ingitdb/ingitdb-go/ingitdb"
@@ -159,11 +159,11 @@ func writeRecordToFile(path string, format ingitdb.RecordFormat, data map[string
 	return nil
 }
 
-// deleteRecordFile removes a record file. Returns dal.ErrRecordNotFound if it does not exist.
+// deleteRecordFile removes a record file. Returns dalrecord.ErrRecordNotFound if it does not exist.
 func deleteRecordFile(path string) error {
 	err := os.Remove(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return dal.ErrRecordNotFound
+		return dalrecord.ErrRecordNotFound
 	}
 	return err
 }

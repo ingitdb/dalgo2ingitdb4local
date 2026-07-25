@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/dal-go/dalgo/dal"
+	dalrecord "github.com/dal-go/record"
 
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
@@ -54,13 +55,13 @@ func TestINGR_InsertGet(t *testing.T) {
 	db := openTestDB(t, dir, def)
 
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.entries", "e001")
+	key := dalrecord.NewKeyWithID("test.entries", "e001")
 	data := map[string]any{
 		"sku":   "WIDGET-001",
 		"name":  "Widget",
 		"price": 9.99,
 	}
-	rec := dal.NewRecordWithData(key, data)
+	rec := dalrecord.NewRecordWithData(key, data)
 	err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Insert(ctx, rec)
 	})
@@ -87,7 +88,7 @@ func TestINGR_InsertGet(t *testing.T) {
 
 	// Read back via DALgo.
 	readData := map[string]any{}
-	readRec := dal.NewRecordWithData(dal.NewKeyWithID("test.entries", "e001"), readData)
+	readRec := dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.entries", "e001"), readData)
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, readRec)
 	})
@@ -130,8 +131,8 @@ func TestINGR_MultipleRecords_RoundTrip(t *testing.T) {
 	}
 	for _, ins := range inserts {
 		err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-			return tx.Insert(ctx, dal.NewRecordWithData(
-				dal.NewKeyWithID("test.entries", ins.id), ins.data))
+			return tx.Insert(ctx, dalrecord.NewRecordWithData(
+				dalrecord.NewKeyWithID("test.entries", ins.id), ins.data))
 		})
 		if err != nil {
 			t.Fatalf("Insert %s: %v", ins.id, err)
@@ -141,8 +142,8 @@ func TestINGR_MultipleRecords_RoundTrip(t *testing.T) {
 	// Read each back; verify field values survive the multi-record round-trip.
 	for _, ins := range inserts {
 		readData := map[string]any{}
-		readRec := dal.NewRecordWithData(
-			dal.NewKeyWithID("test.entries", ins.id), readData)
+		readRec := dalrecord.NewRecordWithData(
+			dalrecord.NewKeyWithID("test.entries", ins.id), readData)
 		err := db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 			return tx.Get(ctx, readRec)
 		})
@@ -183,10 +184,10 @@ func TestINGR_Update(t *testing.T) {
 	def := makeINGRDef(t, dir)
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test.entries", "e001")
+	key := dalrecord.NewKeyWithID("test.entries", "e001")
 
 	if err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		return tx.Insert(ctx, dal.NewRecordWithData(key, map[string]any{
+		return tx.Insert(ctx, dalrecord.NewRecordWithData(key, map[string]any{
 			"sku": "A", "name": "Alpha", "price": 1.10,
 		}))
 	}); err != nil {
@@ -195,7 +196,7 @@ func TestINGR_Update(t *testing.T) {
 
 	if err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		cur := map[string]any{}
-		rec := dal.NewRecordWithData(key, cur)
+		rec := dalrecord.NewRecordWithData(key, cur)
 		if getErr := tx.Get(ctx, rec); getErr != nil {
 			return getErr
 		}
@@ -207,7 +208,7 @@ func TestINGR_Update(t *testing.T) {
 	}
 
 	readData := map[string]any{}
-	readRec := dal.NewRecordWithData(dal.NewKeyWithID("test.entries", "e001"), readData)
+	readRec := dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.entries", "e001"), readData)
 	if err := db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, readRec)
 	}); err != nil {
@@ -231,12 +232,12 @@ func TestINGR_Delete(t *testing.T) {
 	def := makeINGRDef(t, dir)
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	a := dal.NewKeyWithID("test.entries", "a")
-	b := dal.NewKeyWithID("test.entries", "b")
+	a := dalrecord.NewKeyWithID("test.entries", "a")
+	b := dalrecord.NewKeyWithID("test.entries", "b")
 
-	for _, k := range []*dal.Key{a, b} {
+	for _, k := range []*dalrecord.Key{a, b} {
 		err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-			return tx.Insert(ctx, dal.NewRecordWithData(k, map[string]any{
+			return tx.Insert(ctx, dalrecord.NewRecordWithData(k, map[string]any{
 				"sku": k.ID.(string), "name": "x", "price": 1.0,
 			}))
 		})
@@ -253,8 +254,8 @@ func TestINGR_Delete(t *testing.T) {
 	}
 
 	// a is gone, b survives.
-	recA := dal.NewRecordWithData(dal.NewKeyWithID("test.entries", "a"), map[string]any{})
-	recB := dal.NewRecordWithData(dal.NewKeyWithID("test.entries", "b"), map[string]any{})
+	recA := dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.entries", "a"), map[string]any{})
+	recB := dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.entries", "b"), map[string]any{})
 	if err := db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		if getErr := tx.Get(ctx, recA); getErr != nil {
 			return getErr
@@ -308,7 +309,7 @@ func TestINGR_RejectsMissingID(t *testing.T) {
 	}
 	db := openTestDB(t, dir, def)
 	ctx := context.Background()
-	rec := dal.NewRecordWithData(dal.NewKeyWithID("test.entries", "X"), map[string]any{})
+	rec := dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.entries", "X"), map[string]any{})
 	err := db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, rec)
 	})

@@ -5,7 +5,8 @@ import (
 	"testing"
 
 	"github.com/dal-go/dalgo/dal"
-	"github.com/dal-go/dalgo/update"
+	dalrecord "github.com/dal-go/record"
+	"github.com/dal-go/record/update"
 )
 
 func TestReadwriteTx_Panics(t *testing.T) {
@@ -13,10 +14,10 @@ func TestReadwriteTx_Panics(t *testing.T) {
 
 	tx := readwriteTx{readonlyTx: readonlyTx{db: localDB{rootDirPath: "/tmp/root"}}}
 	ctx := context.Background()
-	var record dal.Record
-	var key *dal.Key
-	var records []dal.Record
-	var keys []*dal.Key
+	var record dalrecord.Record
+	var key *dalrecord.Key
+	var records []dalrecord.Record
+	var keys []*dalrecord.Key
 	var updates []update.Update
 	var preconditions []dal.Precondition
 	var insertOptions []dal.InsertOption

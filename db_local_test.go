@@ -7,6 +7,7 @@ import (
 
 	"github.com/dal-go/dalgo/dal"
 	"github.com/dal-go/dalgo/recordset"
+	dalrecord "github.com/dal-go/record"
 )
 
 func expectPanic(t *testing.T, fn func()) {
@@ -39,9 +40,9 @@ func TestNewLocalDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got %s", err)
 	}
-	local, ok := db.(*localDB)
+	local, ok := dal.BackendOf(db).(*localDB)
 	if !ok {
-		t.Fatalf("expected *localDB, got %T", db)
+		t.Fatalf("expected *localDB, got %T", dal.BackendOf(db))
 	}
 	if local.rootDirPath != "/tmp/root" {
 		t.Fatalf("expected rootDirPath to be /tmp/root, got %s", local.rootDirPath)
@@ -104,10 +105,10 @@ func TestLocalDB_Panics(t *testing.T) {
 
 	db := localDB{rootDirPath: "/tmp/root"}
 	ctx := context.Background()
-	var record dal.Record
-	var key *dal.Key
+	var record dalrecord.Record
+	var key *dalrecord.Key
 	var query dal.Query
-	var records []dal.Record
+	var records []dalrecord.Record
 	var options []recordset.Option
 
 	tests := []struct {
