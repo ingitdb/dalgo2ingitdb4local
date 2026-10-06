@@ -66,16 +66,18 @@ func (r readonlyTx) Get(ctx context.Context, record dalrecord.Record) error {
 			record.SetError(dalrecord.ErrRecordNotFound)
 			return nil
 		}
-		record.SetError(nil)
 		target := record.Data().(map[string]any)
 		normalized := ingitdb.ApplyLocaleToRead(recordData, colDef.Columns)
 		if err := decodeSourceTransport(colDef, normalized); err != nil {
+			record.SetError(err)
 			return err
 		}
+		record.SetError(nil)
 		maps.Copy(target, normalized)
 	case ingitdb.ListOfRecords:
 		stored, err := readAllListStored(colDef)
 		if err != nil {
+			record.SetError(err)
 			return err
 		}
 		for _, item := range stored {

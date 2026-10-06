@@ -130,6 +130,9 @@ func TestImportedListRejectsInvalidTransport(t *testing.T) {
 				if getErr := (readonlyTx{db: localDB{def: def}}).Get(context.Background(), point); getErr == nil || !strings.Contains(getErr.Error(), tc.want) {
 					t.Fatalf("point error = %v, want %q", getErr, tc.want)
 				}
+				if point.Error() == nil {
+					t.Fatal("point record did not retain the read error")
+				}
 			}
 		})
 	}
@@ -180,6 +183,13 @@ func TestImportedMapDecodesSourceBytes(t *testing.T) {
 	}
 	if string(point.Data().(map[string]any)["blob"].([]byte)) != "\x00\x01\x02" {
 		t.Fatalf("map point bytes: %#v", point.Data())
+	}
+	if err := os.WriteFile(filepath.Join(dir, "records.json"), []byte(`{"row-000000000001":{"blob":42,"wide":9007199254740993}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	broken := record.NewRecordWithData(record.NewKeyWithID("sample", "row-000000000001"), map[string]any{})
+	if err := (readonlyTx{db: localDB{def: def}}).Get(context.Background(), broken); err == nil || broken.Error() == nil {
+		t.Fatalf("corrupt map point state: Get=%v, Record.Error=%v", err, broken.Error())
 	}
 }
 
