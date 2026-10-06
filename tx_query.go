@@ -2,7 +2,10 @@ package dalgo2fsingitdb
 
 import (
 	"context"
+	"encoding/base64"
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -137,6 +140,12 @@ func readAllRecordsFromDisk(colDef *ingitdb.CollectionDef) ([]dalrecord.Record, 
 		return readAllSingleRecords(colDef)
 	case ingitdb.MapOfRecords:
 		return readAllMapOfRecords(colDef)
+	case ingitdb.ListOfRecords:
+		stored, err := readAllListStored(colDef)
+		if err != nil {
+			return nil, err
+		}
+		return bakeStoredRecords(colDef, stored)
 	default:
 		return nil, fmt.Errorf("unsupported record type %q for query", colDef.RecordFile.RecordType)
 	}
@@ -193,6 +202,8 @@ func readAllStoredRecords(colDef *ingitdb.CollectionDef) ([]dalgo2ingitdb.KeyedS
 		return readAllSingleStored(colDef)
 	case ingitdb.MapOfRecords:
 		return readAllMapStored(colDef)
+	case ingitdb.ListOfRecords:
+		return readAllListStored(colDef)
 	default:
 		return nil, fmt.Errorf("unsupported record type %q for query", colDef.RecordFile.RecordType)
 	}
@@ -259,9 +270,90 @@ func readAllMapStored(colDef *ingitdb.CollectionDef) ([]dalgo2ingitdb.KeyedStore
 	stored := make([]dalgo2ingitdb.KeyedStored, 0, len(allData))
 	for id, fields := range allData {
 		normalized := ingitdb.ApplyLocaleToRead(fields, colDef.Columns)
+		if err := decodeSourceTransport(colDef, normalized); err != nil {
+			return nil, fmt.Errorf("record %q: %w", id, err)
+		}
 		stored = append(stored, dalgo2ingitdb.KeyedStored{Key: id, Stored: normalized})
 	}
 	return stored, nil
+}
+
+// readAllListStored uses the native collection parser so typed CSV cells and
+// JSONL numbers retain their storage types. The reserved $ID is transport
+// identity, not a source column.
+func readAllListStored(colDef *ingitdb.CollectionDef) ([]dalgo2ingitdb.KeyedStored, error) {
+	path := resolveRecordPath(colDef, "")
+	content, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read list records %s: %w", path, err)
+	}
+	var rows []map[string]any
+	if colDef.RecordFile.Format == ingitdb.RecordFormatCSV {
+		parsed, parseErr := ingitdb.ParseRecordContentForCollection(content, colDef)
+		if parseErr != nil {
+			return nil, fmt.Errorf("parse list records %s: %w", path, parseErr)
+		}
+		var ok bool
+		rows, ok = parsed["$records"].([]map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("parse list records %s: invalid CSV rows", path)
+		}
+	} else {
+		rows, err = ingitdb.ParseListOfRecordsContent(content, colDef.RecordFile.Format)
+		if err != nil {
+			return nil, fmt.Errorf("parse list records %s: %w", path, err)
+		}
+	}
+	stored := make([]dalgo2ingitdb.KeyedStored, 0, len(rows))
+	seen := make(map[string]bool, len(rows))
+	for _, row := range rows {
+		id, ok := ingitdb.ResolveListRecordKey(row, colDef)
+		if !ok || id == "" {
+			return nil, fmt.Errorf("list record has no transport ID")
+		}
+		if seen[id] {
+			return nil, fmt.Errorf("duplicate list record ID %q", id)
+		}
+		seen[id] = true
+		delete(row, "$ID")
+		normalized := ingitdb.ApplyLocaleToRead(row, colDef.Columns)
+		if err := decodeSourceTransport(colDef, normalized); err != nil {
+			return nil, fmt.Errorf("record %q: %w", id, err)
+		}
+		stored = append(stored, dalgo2ingitdb.KeyedStored{Key: id, Stored: normalized})
+	}
+	return stored, nil
+}
+
+func decodeSourceTransport(colDef *ingitdb.CollectionDef, fields map[string]any) error {
+	if colDef.SourceSchema == nil || colDef.SourceSchema.KeyMode == "" {
+		return nil
+	}
+	for _, field := range colDef.SourceSchema.Fields {
+		if field.Type != "bytes" {
+			continue
+		}
+		value, exists := fields[field.Name]
+		if !exists {
+			return fmt.Errorf("missing source bytes field %q", field.Name)
+		}
+		if value == nil {
+			continue
+		}
+		encoded, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("source bytes field %q has transport type %T, want base64 string or null", field.Name, value)
+		}
+		decoded, err := base64.StdEncoding.DecodeString(encoded)
+		if err != nil {
+			return fmt.Errorf("decode source bytes field %q: %w", field.Name, err)
+		}
+		fields[field.Name] = decoded
+	}
+	return nil
 }
 
 // buildKeyExtractor creates a function that extracts the record key from a path
