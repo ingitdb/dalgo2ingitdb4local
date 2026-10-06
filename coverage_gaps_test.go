@@ -1308,14 +1308,9 @@ func TestExecuteQueryToRecordsReader_NonStructuredQuery(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	def := makeQueryTestDef(t, dir)
-	db := openTestDB(t, dir, def)
 	ctx := context.Background()
 
-	err := db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
-		rtx := tx.(readonlyTx)
-		_, err := executeQueryToRecordsReader(ctx, rtx, nonStructuredQuery{})
-		return err
-	})
+	_, err := executeQueryToRecordsReader(ctx, readonlyTx{db: localDB{rootDirPath: dir, def: def}}, nonStructuredQuery{})
 	if err == nil {
 		t.Fatal("expected error for non-StructuredQuery, got nil")
 	}
@@ -1338,6 +1333,7 @@ func (nilFromQuery) Columns() []dal.Column          { return nil }
 func (nilFromQuery) IntoRecord() dalrecord.Record   { return nil }
 func (nilFromQuery) IDKind() reflect.Kind           { return reflect.String }
 func (nilFromQuery) StartFrom() dal.Cursor          { return "" }
+func (nilFromQuery) StartAfter() dal.Cursor         { return "" }
 
 // Compile-time check: nilFromQuery must satisfy dal.StructuredQuery.
 var _ dal.StructuredQuery = nilFromQuery{}
@@ -1346,14 +1342,9 @@ func TestExecuteQueryToRecordsReader_NilFrom(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	def := makeQueryTestDef(t, dir)
-	db := openTestDB(t, dir, def)
 	ctx := context.Background()
 
-	err := db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
-		rtx := tx.(readonlyTx)
-		_, err := executeQueryToRecordsReader(ctx, rtx, nilFromQuery{})
-		return err
-	})
+	_, err := executeQueryToRecordsReader(ctx, readonlyTx{db: localDB{rootDirPath: dir, def: def}}, nilFromQuery{})
 	if err == nil {
 		t.Fatal("expected error for nil FROM clause, got nil")
 	}
@@ -1496,19 +1487,15 @@ func (nonCollectionRefFromQuery) Columns() []dal.Column          { return nil }
 func (nonCollectionRefFromQuery) IntoRecord() dalrecord.Record   { return nil }
 func (nonCollectionRefFromQuery) IDKind() reflect.Kind           { return reflect.String }
 func (nonCollectionRefFromQuery) StartFrom() dal.Cursor          { return "" }
+func (nonCollectionRefFromQuery) StartAfter() dal.Cursor         { return "" }
 
 func TestExecuteQueryToRecordsReader_NonCollectionRefFrom(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	def := makeQueryTestDef(t, dir)
-	db := openTestDB(t, dir, def)
 	ctx := context.Background()
 
-	err := db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
-		rtx := tx.(readonlyTx)
-		_, err := executeQueryToRecordsReader(ctx, rtx, nonCollectionRefFromQuery{})
-		return err
-	})
+	_, err := executeQueryToRecordsReader(ctx, readonlyTx{db: localDB{rootDirPath: dir, def: def}}, nonCollectionRefFromQuery{})
 	if err == nil {
 		t.Fatal("expected error for non-CollectionRef FROM, got nil")
 	}

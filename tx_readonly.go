@@ -66,9 +66,28 @@ func (r readonlyTx) Get(ctx context.Context, record dalrecord.Record) error {
 			record.SetError(dalrecord.ErrRecordNotFound)
 			return nil
 		}
-		record.SetError(nil)
 		target := record.Data().(map[string]any)
-		maps.Copy(target, ingitdb.ApplyLocaleToRead(recordData, colDef.Columns))
+		normalized := ingitdb.ApplyLocaleToRead(recordData, colDef.Columns)
+		if err := decodeSourceTransport(colDef, normalized); err != nil {
+			record.SetError(err)
+			return err
+		}
+		record.SetError(nil)
+		maps.Copy(target, normalized)
+	case ingitdb.ListOfRecords:
+		stored, err := readAllListStored(colDef)
+		if err != nil {
+			record.SetError(err)
+			return err
+		}
+		for _, item := range stored {
+			if item.Key == recordKey {
+				record.SetError(nil)
+				maps.Copy(record.Data().(map[string]any), item.Stored)
+				return nil
+			}
+		}
+		record.SetError(dalrecord.ErrRecordNotFound)
 	default:
 		return fmt.Errorf("not yet implemented for record type %q", colDef.RecordFile.RecordType)
 	}
