@@ -1557,3 +1557,166 @@ func TestReadAllSingleRecords_EmptyKey(t *testing.T) {
 		t.Errorf("expected 1 record (empty key skipped), got %d", count)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// resolveScopedCollection – error paths
+// ---------------------------------------------------------------------------
+
+func TestResolveScopedCollection_Errors(t *testing.T) {
+	t.Parallel()
+	if _, err := resolveScopedCollection(nil, "items", nil); err == nil {
+		t.Error("expected error for nil definition, got nil")
+	}
+
+	def := &ingitdb.Definition{
+		Collections: map[string]*ingitdb.CollectionDef{},
+	}
+	parent := dalrecord.NewKeyWithID("missing_root", "id1")
+	if _, err := resolveScopedCollection(def, "sub", parent); err == nil {
+		t.Error("expected error for missing root collection, got nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// readonlyTx.resolveCollection – nil key
+// ---------------------------------------------------------------------------
+
+func TestReadonlyTx_ResolveCollection_NilKey(t *testing.T) {
+	t.Parallel()
+	r := readonlyTx{db: localDB{def: &ingitdb.Definition{}}}
+	if _, _, err := r.resolveCollection(nil); err == nil {
+		t.Error("expected error for nil key, got nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// readwriteTx.Set and Insert – DataToMap error
+// ---------------------------------------------------------------------------
+
+func TestReadwriteTx_DataToMap_Error(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	def := makeQueryTestDef(t, dir)
+	db := openTestDB(t, dir, def)
+	ctx := context.Background()
+
+	err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
+		rec := dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("test.items", "item1"), 12345)
+		if err := tx.Set(ctx, rec); err == nil {
+			t.Error("expected error from Set with non-map data, got nil")
+		}
+		if err := tx.Insert(ctx, rec); err == nil {
+			t.Error("expected error from Insert with non-map data, got nil")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("RunReadwriteTransaction: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// readAllMapStored – decodeSourceTransport error
+// ---------------------------------------------------------------------------
+
+func TestReadAllMapStored_DecodeSourceTransportError(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "records.yaml")
+	if err := os.WriteFile(filePath, []byte("rec1:\n  data: 12345\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	colDef := &ingitdb.CollectionDef{
+		ID:      "test.map_items",
+		DirPath: dir,
+		RecordFile: &ingitdb.RecordFileDef{
+			Name:       "records.yaml",
+			Format:     ingitdb.RecordFormatYAML,
+			RecordType: ingitdb.MapOfRecords,
+		},
+		SourceSchema: &ingitdb.SourceSchemaDef{
+			KeyMode: "single",
+			Fields: []ingitdb.SourceFieldDef{
+				{Name: "data", Type: "bytes"},
+			},
+		},
+	}
+	if _, err := readAllMapStored(colDef); err == nil {
+		t.Error("expected error from readAllMapStored for invalid bytes field, got nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// readAllListStored and readAllRecordsFromDisk – ListOfRecords coverage
+// ---------------------------------------------------------------------------
+
+func TestReadAllListStored_Errors(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	// 1. CSV parse error
+	csvInvalidPath := filepath.Join(dir, "invalid.csv")
+	if err := os.WriteFile(csvInvalidPath, []byte("col1,col2\n\"unclosed quote,val2"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	csvColDef := &ingitdb.CollectionDef{
+		ID:      "test.csv_items",
+		DirPath: dir,
+		RecordFile: &ingitdb.RecordFileDef{
+			Name:       "invalid.csv",
+			Format:     ingitdb.RecordFormatCSV,
+			RecordType: ingitdb.ListOfRecords,
+		},
+	}
+	if _, err := readAllListStored(csvColDef); err == nil {
+		t.Error("expected error for invalid CSV, got nil")
+	}
+
+	// 2. YAML parse error
+
+	yamlInvalidPath := filepath.Join(dir, "invalid.yaml")
+	if err := os.WriteFile(yamlInvalidPath, []byte("unclosed: [list"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	yamlColDef := &ingitdb.CollectionDef{
+		ID:      "test.yaml_items",
+		DirPath: dir,
+		RecordFile: &ingitdb.RecordFileDef{
+			Name:       "invalid.yaml",
+			Format:     ingitdb.RecordFormatYAML,
+			RecordType: ingitdb.ListOfRecords,
+		},
+	}
+	if _, err := readAllListStored(yamlColDef); err == nil {
+		t.Error("expected error for invalid YAML list, got nil")
+	}
+	// readAllRecordsFromDisk propagation of readAllListStored error
+	if _, err := readAllRecordsFromDisk(yamlColDef); err == nil {
+		t.Error("expected error from readAllRecordsFromDisk when readAllListStored fails, got nil")
+	}
+
+	// 4. Successful readAllRecordsFromDisk with ListOfRecords
+	yamlValidPath := filepath.Join(dir, "valid_list.yaml")
+	if err := os.WriteFile(yamlValidPath, []byte("- $id: rec1\n  name: Item 1\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	yamlValidColDef := &ingitdb.CollectionDef{
+		ID:      "test.valid_yaml_items",
+		DirPath: dir,
+		RecordFile: &ingitdb.RecordFileDef{
+			Name:       "valid_list.yaml",
+			Format:     ingitdb.RecordFormatYAML,
+			RecordType: ingitdb.ListOfRecords,
+		},
+		Columns: map[string]*ingitdb.ColumnDef{
+			"name": {Type: ingitdb.ColumnTypeString},
+		},
+	}
+	recs, err := readAllRecordsFromDisk(yamlValidColDef)
+	if err != nil {
+		t.Fatalf("readAllRecordsFromDisk: %v", err)
+	}
+	if len(recs) != 1 {
+		t.Errorf("expected 1 record, got %d", len(recs))
+	}
+}
