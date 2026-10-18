@@ -296,11 +296,7 @@ func readAllListStored(colDef *ingitdb.CollectionDef) ([]dalgo2ingitdb.KeyedStor
 		if parseErr != nil {
 			return nil, fmt.Errorf("parse list records %s: %w", path, parseErr)
 		}
-		var ok bool
-		rows, ok = parsed["$records"].([]map[string]any)
-		if !ok {
-			return nil, fmt.Errorf("parse list records %s: invalid CSV rows", path)
-		}
+		rows = parsed["$records"].([]map[string]any)
 	} else {
 		rows, err = ingitdb.ParseListOfRecordsContent(content, colDef.RecordFile.Format)
 		if err != nil {
