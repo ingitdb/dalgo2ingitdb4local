@@ -8,7 +8,7 @@ require (
 	github.com/dal-go/dalgo v0.95.4
 	github.com/dal-go/record v0.1.5
 	github.com/ingitdb/dalgo2ingitdb v0.7.7
-	github.com/ingitdb/ingitdb-go/ingitdb v0.10.2
+	github.com/ingitdb/ingitdb-go/ingitdb v0.10.6
 	github.com/pelletier/go-toml/v2 v2.4.3
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -20,6 +20,6 @@ require (
 	github.com/ingr-io/ingr-go v0.0.2 // indirect
 	github.com/mschoch/smat v0.2.0 // indirect
 	github.com/strongo/random v0.0.3 // indirect
-	go.starlark.net v0.0.0-20260708150628-5395d018f003 // indirect
+	go.starlark.net v0.0.0-20261021141710-4f4267fb140d // indirect
 	golang.org/x/sys v0.47.0 // indirect
 )
