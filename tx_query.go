@@ -390,6 +390,14 @@ func evaluateCondition(cond dal.Condition, data map[string]any, recordKey string
 		return evaluateComparison(c, data, recordKey)
 	case dal.GroupCondition:
 		return evaluateGroupCondition(c, data, recordKey)
+	case dal.IsNullCondition:
+		// IS [NOT] NULL is always TRUE or FALSE: an absent field, an explicit
+		// null and a nil pointer all count as NULL (see dal.IsNullValue).
+		value, err := resolveExpression(c.Operand(), data, recordKey)
+		if err != nil {
+			return false, err
+		}
+		return dal.IsNullValue(value) != c.Negated(), nil
 	default:
 		return false, fmt.Errorf("unsupported condition type %T", cond)
 	}
