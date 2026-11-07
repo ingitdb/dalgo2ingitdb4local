@@ -7,7 +7,7 @@ toolchain go1.27.3
 require (
 	github.com/dal-go/dalgo v0.102.0
 	github.com/dal-go/record v0.1.5
-	github.com/ingitdb/dalgo2ingitdb v0.7.11
+	github.com/ingitdb/dalgo2ingitdb v0.7.12
 	github.com/ingitdb/ingitdb-go/ingitdb v0.10.6
 	github.com/pelletier/go-toml/v2 v2.4.3
 	gopkg.in/yaml.v3 v3.0.1
