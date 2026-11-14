@@ -21,7 +21,7 @@ func collectionGroupDef(root string) *ingitdb.Definition {
 	ext := &ingitdb.CollectionDef{ID: "ext", DirPath: "ignored", RecordFile: rf(), Columns: cols, ColumnsOrder: []string{"title"},
 		SubCollections: map[string]*ingitdb.CollectionDef{"days": days}}
 	spacesRF := rf()
-	spacesRF.ExcludeRegex = "^skip-"
+	spacesRF.ExcludeRegex = "^old"
 	spaces := &ingitdb.CollectionDef{ID: "spaces", DirPath: filepath.Join(root, "spaces"), RecordFile: spacesRF, Columns: cols, ColumnsOrder: []string{"title"},
 		SubCollections: map[string]*ingitdb.CollectionDef{"ext": ext}}
 	return &ingitdb.Definition{Collections: map[string]*ingitdb.CollectionDef{"spaces": spaces}}
@@ -41,9 +41,11 @@ func writeFiles(t *testing.T, root string, files map[string]string) {
 }
 
 // Every instance of spaces/ext/days is found, including instances below
-// parents with no record file (s2 has none, nor does any ext), and nothing
-// else is: hidden, `$`-prefixed and excluded entries, a plain file, a parent
-// whose subcollection entry is a file, and a parent without that subcollection.
+// parents with no record file (s2 has none, nor does any ext), a symlinked
+// parent, and a parent whose name matches exclude_regex (which applies to
+// record files only, as in the readers). Nothing else is: hidden and
+// `$`-prefixed entries, a plain file, a parent whose subcollection entry is a
+// file, and a parent without that subcollection.
 // Each returned parent reads its own records through the driver.
 func TestSubCollectionParents_FindsEveryInstance(t *testing.T) {
 	t.Parallel()
@@ -56,11 +58,16 @@ func TestSubCollectionParents_FindsEveryInstance(t *testing.T) {
 		"spaces/s2/ext/calendarius/days/$records/d2.yaml":     "title: s2 c d2\n",
 		"spaces/s3/ext/calendarius/other/$records/x.yaml":     "title: no days\n",
 		"spaces/s4/ext/calendarius/days":                      "a file, not a directory",
-		"spaces/skip-me/ext/calendarius/days/$records/x.yaml": "title: excluded\n",
+		"spaces/old-s5/ext/calendarius/days/$records/d5.yaml": "title: s5 c d5\n",
+		"linked-target/ext/calendarius/days/$records/d6.yaml": "title: s6 c d6\n",
 		"spaces/.hidden/ext/calendarius/days/$records/x.yaml": "title: hidden\n",
 		"spaces/$views/ext/calendarius/days/$records/x.yaml":  "title: views\n",
-		"spaces/file.yaml":                                    "title: plain file\n",
+		"spaces/file.yaml": "title: plain file\n",
 	})
+	// A symlinked parent directory counts, as when it is read by path.
+	if err := os.Symlink(filepath.Join(root, "linked-target"), filepath.Join(root, "spaces", "s6")); err != nil {
+		t.Fatal(err)
+	}
 	def := collectionGroupDef(root)
 	parents, err := SubCollectionParents(def, "spaces/ext/days")
 	if err != nil {
@@ -70,7 +77,7 @@ func TestSubCollectionParents_FindsEveryInstance(t *testing.T) {
 	for _, p := range parents {
 		got = append(got, p.String())
 	}
-	want := "spaces/s1/ext/calendarius spaces/s1/ext/commitius spaces/s2/ext/calendarius"
+	want := "spaces/old-s5/ext/calendarius spaces/s1/ext/calendarius spaces/s1/ext/commitius spaces/s2/ext/calendarius spaces/s6/ext/calendarius"
 	if strings.Join(got, " ") != want {
 		t.Fatalf("parents = %v, want %s", got, want)
 	}
@@ -79,8 +86,8 @@ func TestSubCollectionParents_FindsEveryInstance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ids := []string{"d1", "d1", "d2"}
-	wantTitles := []string{"s1 c d1", "s1 m d1", "s2 c d2"}
+	ids := []string{"d5", "d1", "d1", "d2", "d6"}
+	wantTitles := []string{"s5 c d5", "s1 c d1", "s1 m d1", "s2 c d2", "s6 c d6"}
 	err = db.RunReadonlyTransaction(context.Background(), func(ctx context.Context, tx dal.ReadTransaction) error {
 		for i, parent := range parents {
 			data := map[string]any{}

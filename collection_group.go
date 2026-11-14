@@ -21,8 +21,9 @@ import (
 // (resolveScopedCollection: <parent dir>/<parentKey>/<subcollection>), so a
 // parent with no record file of its own still counts, as Firestore allows.
 // Hidden and `$`-prefixed entries (`$records`, `$views`; no record key starts
-// with `$`) and names matched by the parent's exclude_regex are never
-// parents. Each returned key's collection-and-id chain is the parent chain to
+// with `$`) are never parents. A symlinked parent directory counts, as it
+// does when the instance is read by path; exclude_regex applies to record
+// files, not to parent directories, as in the readers. Each returned key's collection-and-id chain is the parent chain to
 // pass to dal.NewCollectionRef(<leaf>, "", parent). Keys are sorted by path.
 // A schemaPath of one root collection id has one instance, the root itself,
 // returned as a nil key.
@@ -48,7 +49,7 @@ func SubCollectionParents(def *ingitdb.Definition, schemaPath string) ([]*dalrec
 		}
 		var next []instance
 		for _, inst := range current {
-			for _, key := range parentKeysWithDir(inst.dir, colDef.RecordFile, subID) {
+			for _, key := range parentKeysWithDir(inst.dir, subID) {
 				next = append(next, instance{
 					dir:    filepath.Join(inst.dir, key, subID),
 					parent: dalrecord.NewKeyWithParentAndID(inst.parent, collection, key),
@@ -65,10 +66,10 @@ func SubCollectionParents(def *ingitdb.Definition, schemaPath string) ([]*dalrec
 	return parents, nil
 }
 
-// parentKeysWithDir returns the names of the entries of dir that are
-// directories holding a directory named subID, skipping hidden, `$`-prefixed
-// and excluded names. An unreadable or missing dir yields none.
-func parentKeysWithDir(dir string, recordFile *ingitdb.RecordFileDef, subID string) []string {
+// parentKeysWithDir returns the names of the entries of dir that hold a
+// directory named subID (following symlinks), skipping hidden and
+// `$`-prefixed names. An unreadable or missing dir yields none.
+func parentKeysWithDir(dir, subID string) []string {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil
@@ -76,10 +77,7 @@ func parentKeysWithDir(dir string, recordFile *ingitdb.RecordFileDef, subID stri
 	var keys []string
 	for _, entry := range entries {
 		name := entry.Name()
-		if !entry.IsDir() || strings.HasPrefix(name, ".") || strings.HasPrefix(name, "$") {
-			continue
-		}
-		if recordFile != nil && recordFile.IsExcluded(name) {
+		if strings.HasPrefix(name, ".") || strings.HasPrefix(name, "$") {
 			continue
 		}
 		if info, statErr := os.Stat(filepath.Join(dir, name, subID)); statErr != nil || !info.IsDir() {
