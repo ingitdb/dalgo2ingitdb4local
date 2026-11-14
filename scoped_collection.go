@@ -70,8 +70,8 @@ func resolveScopedCollection(def *ingitdb.Definition, collection string, parent 
 	if !ok {
 		return nil, fmt.Errorf("collection %q not found in definition", rootCol)
 	}
-	dir := cur.DirPath
-	legacy := dir // where earlier adapter versions put the same instance
+	rootDir := cur.DirPath
+	dir := rootDir
 	// Walk the intermediate ancestors (root's children, grandchildren, ...).
 	for i := 1; i < len(ancestors); i++ {
 		parentID := ancestors[i-1].id
@@ -80,8 +80,10 @@ func resolveScopedCollection(def *ingitdb.Definition, collection string, parent 
 		if !ok {
 			return nil, fmt.Errorf("subcollection %q under %q not found in definition", subColID, cur.ID)
 		}
+		if err := checkNotMislaid(rootDir, dir, cur, parentID, subColID); err != nil {
+			return nil, err
+		}
 		dir = filepath.Join(dir, recordsBasePath(cur), parentID, subColID)
-		legacy = filepath.Join(legacy, parentID, subColID)
 		cur = sub
 	}
 
@@ -92,14 +94,12 @@ func resolveScopedCollection(def *ingitdb.Definition, collection string, parent 
 	if !ok {
 		return nil, fmt.Errorf("subcollection %q under %q not found in definition", collection, cur.ID)
 	}
-	base := recordsBasePath(cur)
-	dir = filepath.Join(dir, base, parentID, collection)
-	legacy = filepath.Join(legacy, parentID, collection)
-	if legacy != dir {
-		if files := countFiles(legacy); files > 0 {
-			return nil, fmt.Errorf("%w: subcollection %s/%s of parent record %q: %s holds %d file(s), but the definition puts them at %s (%s keeps its records in record_file.records_dir %q). Move them there, or set record_file.records_dir: \".\" on %s and move its own records out of its records directory",
-				ErrMislaidSubCollection, cur.ID, collection, parentID, legacy, files, dir, cur.ID, base, cur.ID)
-		}
+	if err := checkNotMislaid(rootDir, dir, cur, parentID, collection); err != nil {
+		return nil, err
+	}
+	dir = filepath.Join(dir, recordsBasePath(cur), parentID, collection)
+	if !within(rootDir, dir) {
+		return nil, fmt.Errorf("%w: %s", ErrParentKeyEscapes, dir)
 	}
 
 	scoped := *target
@@ -110,6 +110,47 @@ func resolveScopedCollection(def *ingitdb.Definition, collection string, parent 
 // ErrMislaidSubCollection reports subcollection records found where the
 // definition does not put them (see resolveScopedCollection).
 var ErrMislaidSubCollection = errors.New("subcollection records outside the location the definition defines")
+
+// ErrParentKeyEscapes reports a parent record ID (such as "..") that would
+// place a subcollection outside the root collection's directory.
+var ErrParentKeyEscapes = errors.New("parent record ID leads outside the collection directory")
+
+// checkNotMislaid reports ErrMislaidSubCollection when the instance of
+// subcollection sub under parent record parentID of collection cur, whose
+// defined directory is parentDir (cur's resolved DirPath), has files at
+// <parentDir>/<parentID>/<sub>/ although cur keeps its records in a records
+// directory: the layout this adapter wrote before. It is checked at every
+// level, so a deeper instance below a mislaid ancestor is reported too (the
+// count is recursive). Nothing outside rootDir is read.
+func checkNotMislaid(rootDir, parentDir string, cur *ingitdb.CollectionDef, parentID, sub string) error {
+	base := recordsBasePath(cur)
+	if base == "" || parentID == recordsDirHead(base) {
+		return nil // no other layout, or the path is inside the records directory itself
+	}
+	found := filepath.Join(parentDir, parentID, sub)
+	if !within(rootDir, found) {
+		return fmt.Errorf("%w: %s", ErrParentKeyEscapes, found)
+	}
+	files := countFiles(found)
+	if files == 0 {
+		return nil
+	}
+	expected := filepath.Join(parentDir, base, parentID, sub)
+	return fmt.Errorf("%w: subcollection %s/%s of parent record %q: %s holds %d file(s), but the definition puts them at %s (%s keeps its records in record_file.records_dir %q). Move them there, or set record_file.records_dir: \".\" on %s and move its own records out of its records directory",
+		ErrMislaidSubCollection, cur.ID, sub, parentID, found, files, expected, cur.ID, base, cur.ID)
+}
+
+// recordsDirHead is the first path segment of a records directory.
+func recordsDirHead(base string) string {
+	head, _, _ := strings.Cut(filepath.ToSlash(base), "/")
+	return head
+}
+
+// within reports whether path is root or below it, lexically.
+func within(root, path string) bool {
+	rel, err := filepath.Rel(root, path)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
 
 // recordsBasePath is the directory, below a collection's DirPath, that holds
 // its record files and its records' subcollection directories.
