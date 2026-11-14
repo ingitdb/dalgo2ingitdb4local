@@ -33,6 +33,15 @@ func (r readonlyTx) Get(ctx context.Context, record dalrecord.Record) error {
 	if err != nil {
 		return err
 	}
+	// A file under a name that differs only in case is another record's
+	// (casefold.go).
+	if err := caseVariantNotFound(r.db.rootDirPath, colDef, recordKey, path); err != nil {
+		if dalrecord.IsNotFound(err) {
+			record.SetError(err)
+			return nil
+		}
+		return err
+	}
 	switch colDef.RecordFile.RecordType {
 	case ingitdb.SingleRecord:
 		var (
@@ -143,6 +152,13 @@ func (r readonlyTx) ExecuteQueryToRecordsetReader(_ context.Context, query dal.Q
 	colDef, err := collectionFromQuery(r.db.def, query)
 	if err != nil {
 		return nil, err
+	}
+	variant, err := queryReadsCaseVariant(r.db.rootDirPath, colDef)
+	if err != nil {
+		return nil, err
+	}
+	if variant {
+		return dalgo2ingitdb.NewRecordsetReader(dalgo2ingitdb.BuildRecordset(colDef, nil)), nil
 	}
 	stored, err := readAllStoredRecords(colDef)
 	if err != nil {

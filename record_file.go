@@ -72,7 +72,7 @@ func resolveRecordPath(colDef *ingitdb.CollectionDef, recordKey string) string {
 // Returns (nil, false, nil) if the file does not exist.
 // For markdown-format collections use readMarkdownRecord instead.
 func readRecordFromFile(path string, format ingitdb.RecordFormat) (map[string]any, bool, error) {
-	fileContent, err := os.ReadFile(path)
+	fileContent, err := fsys.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, false, nil
@@ -104,7 +104,7 @@ func readRecordFromFile(path string, format ingitdb.RecordFormat) (map[string]an
 // document body under the configured content_field column name.
 // Returns (nil, false, nil) if the file does not exist.
 func readMarkdownRecord(path string, colDef *ingitdb.CollectionDef) (map[string]any, bool, error) {
-	fileContent, err := os.ReadFile(path)
+	fileContent, err := fsys.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, false, nil
@@ -126,7 +126,7 @@ func readMarkdownRecord(path string, colDef *ingitdb.CollectionDef) (map[string]
 // (appended after declared columns, alphabetically).
 func writeMarkdownRecord(path string, colDef *ingitdb.CollectionDef, data map[string]any) error {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := fsys.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
 	contentField := colDef.RecordFile.ResolvedContentField()
@@ -142,7 +142,7 @@ func writeMarkdownRecord(path string, colDef *ingitdb.CollectionDef, data map[st
 	if err != nil {
 		return fmt.Errorf("failed to serialize markdown record: %w", err)
 	}
-	if writeErr := os.WriteFile(path, content, 0o644); writeErr != nil {
+	if writeErr := fsys.WriteFile(path, content, 0o644); writeErr != nil {
 		return fmt.Errorf("failed to write file %s: %w", path, writeErr)
 	}
 	return nil
@@ -170,7 +170,7 @@ func extractBody(data map[string]any, contentField string) []byte {
 // Intermediate directories are created as needed.
 func writeRecordToFile(path string, format ingitdb.RecordFormat, data map[string]any) error {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := fsys.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
 	var (
@@ -197,7 +197,7 @@ func writeRecordToFile(path string, format ingitdb.RecordFormat, data map[string
 	default:
 		return fmt.Errorf("unsupported record format %q", format)
 	}
-	if err = os.WriteFile(path, content, 0o644); err != nil {
+	if err = fsys.WriteFile(path, content, 0o644); err != nil {
 		return fmt.Errorf("failed to write file %s: %w", path, err)
 	}
 	return nil
@@ -205,7 +205,7 @@ func writeRecordToFile(path string, format ingitdb.RecordFormat, data map[string
 
 // deleteRecordFile removes a record file. Returns dalrecord.ErrRecordNotFound if it does not exist.
 func deleteRecordFile(path string) error {
-	err := os.Remove(path)
+	err := fsys.Remove(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return dalrecord.ErrRecordNotFound
 	}
@@ -220,7 +220,7 @@ func deleteRecordFile(path string) error {
 // every supported format including INGR (where records are read from a
 // list and re-indexed by `$ID`).
 func readMapOfRecordsFile(path string, format ingitdb.RecordFormat) (map[string]map[string]any, bool, error) {
-	fileContent, err := os.ReadFile(path)
+	fileContent, err := fsys.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, false, nil
@@ -243,7 +243,7 @@ func readMapOfRecordsFile(path string, format ingitdb.RecordFormat) (map[string]
 // column order from the collection schema.
 func writeMapOfRecordsFile(path string, colDef *ingitdb.CollectionDef, data map[string]map[string]any) error {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := fsys.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
 	content, err := ingitdb.EncodeMapOfRecordsContent(
@@ -251,7 +251,7 @@ func writeMapOfRecordsFile(path string, colDef *ingitdb.CollectionDef, data map[
 	if err != nil {
 		return fmt.Errorf("failed to encode records for %s: %w", path, err)
 	}
-	if writeErr := os.WriteFile(path, content, 0o644); writeErr != nil {
+	if writeErr := fsys.WriteFile(path, content, 0o644); writeErr != nil {
 		return fmt.Errorf("failed to write file %s: %w", path, writeErr)
 	}
 	return nil
