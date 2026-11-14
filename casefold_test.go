@@ -400,3 +400,14 @@ func TestCaseVariant_Edges(t *testing.T) {
 		t.Errorf("swapCase: %q", got)
 	}
 }
+
+// osFS lists a folder; the driver lists one only where it folds case, which a
+// case-sensitive CI runner never has.
+func TestOSFS_ReadDir(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"a.yaml": ""})
+	if entries, err := (osFS{}).ReadDir(dir); err != nil || len(entries) != 1 || entries[0].Name() != "a.yaml" {
+		t.Errorf("ReadDir: %v, %v", entries, err)
+	}
+}
