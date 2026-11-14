@@ -255,3 +255,28 @@ func TestCheckNoCaseCollision_NoRoot(t *testing.T) {
 		t.Errorf("got %v", err)
 	}
 }
+
+// Every one-record-per-file collection fails an over-long key with
+// ErrKeyNotStorable and the remedy, also without a key encoding, for the
+// record file and a parent directory.
+func TestLengthRule_NoKeyEncoding(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	root := t.TempDir()
+	def := tildeSpacesNotes(root)
+	def.Collections["spaces"].RecordFile.KeyEncoding = ""
+	def.Collections["spaces"].SubCollections["notes"].RecordFile.KeyEncoding = ""
+	db, err := NewLocalDBWithDef(root, def)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := setTitle(ctx, db, dalrecord.NewKeyWithID("spaces", strings.Repeat("k", 250)), "fits"); err != nil {
+		t.Errorf("a 255-byte name: %v", err)
+	}
+	if err := setTitle(ctx, db, dalrecord.NewKeyWithID("spaces", strings.Repeat("k", 251)), "x"); !errors.Is(err, ingitdb.ErrKeyNotStorable) || !strings.Contains(err.Error(), "record_file.type") {
+		t.Errorf("a 256-byte name: %v", err)
+	}
+	if err := setTitle(ctx, db, dalrecord.NewKeyWithParentAndID(dalrecord.NewKeyWithID("spaces", strings.Repeat("p", 256)), "notes", "n"), "x"); !errors.Is(err, ingitdb.ErrKeyNotStorable) {
+		t.Errorf("an over-long parent directory: %v", err)
+	}
+}

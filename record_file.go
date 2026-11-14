@@ -23,11 +23,16 @@ import (
 // one file per record fails with ingitdb.ErrKeyNotStorable.
 func keyedRecordPath(colDef *ingitdb.CollectionDef, recordKey string) (string, error) {
 	rf := colDef.RecordFile
-	if !rf.EncodesKeys() || !strings.Contains(rf.Name, "{key}") {
+	if !strings.Contains(rf.Name, "{key}") {
 		return resolveRecordPath(colDef, recordKey), nil
 	}
+	// The length rule holds for every one-record-per-file collection
+	// (record-key-encoding#req:over-long-key-fails).
 	if err := rf.CheckKeyFits(recordKey); err != nil {
 		return "", err
+	}
+	if !rf.EncodesKeys() {
+		return resolveRecordPath(colDef, recordKey), nil
 	}
 	name, _ := rf.EncodeKey(recordKey) // CheckKeyFits encoded it
 	return resolveRecordPath(colDef, name), nil
