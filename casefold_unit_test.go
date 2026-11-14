@@ -27,7 +27,7 @@ func TestCaseVariant_Edges(t *testing.T) {
 	if m, err := caseVariant(nil, root, root); err != nil || m != nil {
 		t.Errorf("root itself: %+v %v", m, err)
 	}
-	// A name with no letter that has a case is never another name.
+	// A name that is on disk as it is given is never another name.
 	writeFiles(t, root, map[string]string{"42/x": ""})
 	if m, err := caseVariant(nil, root, filepath.Join(root, "42", "x")); err != nil || m != nil {
 		t.Errorf("no letters: %+v %v", m, err)
@@ -48,8 +48,8 @@ func TestCaseVariant_Edges(t *testing.T) {
 	if exists, _, err := getTitle(db, dalrecord.NewKeyWithID("people", "a/b")); err != nil || exists {
 		t.Errorf("Get a/b: %v %v", exists, err)
 	}
-	if got := swapCase("Bob-42é"); got != "bOB-42É" {
-		t.Errorf("swapCase: %q", got)
+	if got := shown("people/caf\u00e9.yaml") + " " + shown("people/Bob.yaml"); got != `"people/caf\u00e9.yaml" people/Bob.yaml` {
+		t.Errorf("shown: %s", got)
 	}
 }
 
@@ -75,11 +75,12 @@ func TestCaseVariant_StaleListing(t *testing.T) {
 	}
 }
 
-// A nil dirCache lists every time and records nothing; absPath makes a
+// A nil dirCache lists every time and records nothing, written or removed; absPath makes a
 // relative path absolute.
 func TestDirCache_Nil(t *testing.T) {
 	var cache *dirCache
 	cache.wrote("x")
+	cache.removed("x")
 	dir := t.TempDir()
 	if names, err := cache.list(dir); err != nil || len(names) != 0 {
 		t.Errorf("nil list: %v %v", names, err)

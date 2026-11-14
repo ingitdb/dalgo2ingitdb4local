@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -23,7 +24,13 @@ import (
 // form it is created with. A test that stands it in
 // (withFoldFS) shows on a case-sensitive file system (Linux CI) what a
 // case-insensitive one does.
-type foldFS struct{ root string }
+//
+// With trimDots it also drops trailing dots, as Windows does: 42. names 42,
+// a name with no letter that has a case.
+type foldFS struct {
+	root     string
+	trimDots bool
+}
 
 // resolve is the real path of the entry path names on this file system.
 func (f foldFS) resolve(path string) string {
@@ -35,7 +42,7 @@ func (f foldFS) resolve(path string) string {
 	for _, name := range strings.Split(rel, string(filepath.Separator)) {
 		entries, _ := os.ReadDir(dir)
 		for _, e := range entries {
-			if foldName(e.Name()) == foldName(name) {
+			if f.foldName(e.Name()) == f.foldName(name) {
 				name = e.Name()
 				break
 			}
@@ -49,9 +56,14 @@ func (f foldFS) resolve(path string) string {
 // syllable 한 (three jamo).
 var nfd = strings.NewReplacer("e\u0301", "\u00e9", "\u1112\u1161\u11ab", "\ud55c")
 
-// foldName is the name foldFS compares: in NFC (for the forms in nfd) and in
-// lower case.
-func foldName(name string) string { return strings.ToLower(nfd.Replace(name)) }
+// foldName is the name foldFS compares: in NFC (for the forms in nfd), in
+// lower case and, with trimDots, without trailing dots.
+func (f foldFS) foldName(name string) string {
+	if f.trimDots {
+		name = strings.TrimRight(name, ".")
+	}
+	return strings.ToLower(nfd.Replace(name))
+}
 
 func (f foldFS) ReadFile(name string) ([]byte, error) { return os.ReadFile(f.resolve(name)) }
 func (f foldFS) WriteFile(name string, data []byte, perm fs.FileMode) error {
@@ -329,7 +341,10 @@ func checkNormalisation(t *testing.T, root string) {
 		file := filepath.Join(root, "people", "$records", nfdName+".yaml")
 		writeFiles(t, root, map[string]string{"people/$records/" + nfdName + ".yaml": "title: nfd\n"})
 		key := dalrecord.NewKeyWithID("people", nfcKey)
-		if err := setTitle(context.Background(), db, key, "nfc"); !errors.Is(err, ErrNameDiffersInCase) || !strings.Contains(err.Error(), nfdName) {
+		// The two names look the same, so the error quotes them in ASCII.
+		err := setTitle(context.Background(), db, key, "nfc")
+		if !errors.Is(err, ErrNameDiffersInCase) || !strings.Contains(err.Error(), strconv.QuoteToASCII(file)) ||
+			!strings.Contains(err.Error(), strconv.QuoteToASCII(filepath.Join(root, "people", "$records", nfcKey+".yaml"))) {
 			t.Errorf("Set %q (NFC) over %q (NFD): %v", nfcKey, nfdName, err)
 		}
 		if err := insertTitle(db, key, "nfc"); !errors.Is(err, ErrNameDiffersInCase) {
@@ -459,6 +474,7 @@ func TestCaseFold_Simulated(t *testing.T) {
 	}
 	for name, check := range map[string]func(*testing.T, string){
 		"normalisation": checkNormalisation, "layout": checkLayoutDiffersInCase, "relative": checkRelativeDirPath,
+		"delete-then-variant": checkDeleteThenCaseVariant, "same-key-twice": checkSameKeyTwice, "uncased-non-ascii-dir": checkUncasedNonASCIIDir,
 	} {
 		t.Run(name, func(t *testing.T) {
 			root := t.TempDir()
@@ -487,6 +503,7 @@ func TestCaseFold_RealFileSystem(t *testing.T) {
 	}
 	for name, check := range map[string]func(*testing.T, string){
 		"normalisation": checkNormalisation, "layout": checkLayoutDiffersInCase, "relative": checkRelativeDirPath,
+		"delete-then-variant": checkDeleteThenCaseVariant, "same-key-twice": checkSameKeyTwice, "uncased-non-ascii-dir": checkUncasedNonASCIIDir,
 	} {
 		t.Run(name, func(t *testing.T) {
 			root := t.TempDir()
@@ -549,13 +566,136 @@ func TestCaseFold_ReadDirFails(t *testing.T) {
 	}
 }
 
-// osFS lists a folder; the driver lists one only where it folds case, which a
-// case-sensitive CI runner never has.
+// osFS lists a folder.
 func TestOSFS_ReadDir(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{"a.yaml": ""})
 	if entries, err := (osFS{}).ReadDir(dir); err != nil || len(entries) != 1 || entries[0].Name() != "a.yaml" {
 		t.Errorf("ReadDir: %v, %v", entries, err)
+	}
+}
+
+// txStep is one write of runSteps.
+type txStep struct {
+	key   *dalrecord.Key
+	title any // nil deletes the key
+}
+
+// runSteps runs steps, in order, in one transaction, and returns the error
+// of each Set or Delete.
+func runSteps(db dal.DB, steps ...txStep) []error {
+	errs := make([]error, len(steps))
+	_ = db.RunReadwriteTransaction(context.Background(), func(ctx context.Context, tx dal.ReadwriteTransaction) error {
+		for i, s := range steps {
+			if s.title == nil {
+				errs[i] = tx.Delete(ctx, s.key)
+			} else {
+				errs[i] = tx.Set(ctx, dalrecord.NewRecordWithData(s.key, map[string]any{"title": s.title}))
+			}
+		}
+		return nil
+	})
+	return errs
+}
+
+// checkDeleteThenCaseVariant is the rule for a name a transaction deleted: it
+// no longer stands for a file, so once a case variant takes its place a write
+// of the old name is refused and does not overwrite the variant.
+func checkDeleteThenCaseVariant(t *testing.T, root string) {
+	t.Helper()
+	writeFiles(t, root, map[string]string{"people/$records/bob.yaml": "title: bob\n"})
+	db, err := NewLocalDBWithDef(root, caseFoldDef(root, ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bob, Bob := dalrecord.NewKeyWithID("people", "bob"), dalrecord.NewKeyWithID("people", "Bob")
+	errs := runSteps(db, txStep{bob, "bob"}, txStep{bob, nil}, txStep{Bob, "Bob"}, txStep{bob, "bob again"})
+	for i, err := range errs[:3] {
+		if err != nil {
+			t.Errorf("step %d: %v", i+1, err)
+		}
+	}
+	if !errors.Is(errs[3], ErrNameDiffersInCase) {
+		t.Errorf("Set bob over Bob after Delete bob: %v", errs[3])
+	}
+	dir := filepath.Join(root, "people", "$records")
+	if got := readFile(t, filepath.Join(dir, "Bob.yaml")); got != "title: Bob\n" {
+		t.Errorf("Bob.yaml: %q", got)
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 1 || entries[0].Name() != "Bob.yaml" {
+		t.Errorf("records folder: %v", entries)
+	}
+}
+
+// checkSameKeyTwice is the rule for a transaction's own writes: once a folder
+// is listed, a record the transaction creates there can be written again.
+func checkSameKeyTwice(t *testing.T, root string) {
+	t.Helper()
+	writeFiles(t, root, map[string]string{"people/$records/ann.yaml": "title: ann\n"})
+	db, err := NewLocalDBWithDef(root, caseFoldDef(root, ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ann, cid := dalrecord.NewKeyWithID("people", "ann"), dalrecord.NewKeyWithID("people", "cid")
+	// Set ann lists the records folder; cid is then new in it.
+	for i, err := range runSteps(db, txStep{ann, "ann"}, txStep{cid, "cid"}, txStep{cid, "cid again"}) {
+		if err != nil {
+			t.Errorf("step %d: %v", i+1, err)
+		}
+	}
+	if got := readFile(t, filepath.Join(root, "people", "$records", "cid.yaml")); got != "title: cid again\n" {
+		t.Errorf("cid.yaml: %q", got)
+	}
+}
+
+// dirRecordsDef is caseFoldDef with each person in a folder of its own:
+// people/$records/{key}/index.yaml.
+func dirRecordsDef(root string) *ingitdb.Definition {
+	def := caseFoldDef(root, "")
+	def.Collections["people"].RecordFile.Name = "{key}/index.yaml"
+	return def
+}
+
+// checkUncasedNonASCIIDir is the rule for a record folder named by a key with
+// no letter that has a case and a non-ASCII rune: 한 in NFC as the key, with
+// its folder on disk in NFD, is another record's folder and is not written.
+func checkUncasedNonASCIIDir(t *testing.T, root string) {
+	t.Helper()
+	nfdName, nfcKey := "한", "한"
+	writeFiles(t, root, map[string]string{"people/$records/" + nfdName + "/index.yaml": "title: nfd\n"})
+	db, err := NewLocalDBWithDef(root, dirRecordsDef(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := dalrecord.NewKeyWithID("people", nfcKey)
+	if err := setTitle(context.Background(), db, key, "nfc"); !errors.Is(err, ErrNameDiffersInCase) {
+		t.Errorf("Set %q (NFC) over folder %q (NFD): %v", nfcKey, nfdName, err)
+	}
+	if err := deleteKey(db, key); !dalrecord.IsNotFound(err) || !errors.Is(err, ErrNameDiffersInCase) {
+		t.Errorf("Delete %q (NFC): %v", nfcKey, err)
+	}
+	if got := readFile(t, filepath.Join(root, "people", "$records", nfdName, "index.yaml")); got != "title: nfd\n" {
+		t.Errorf("%q/index.yaml: %q", nfdName, got)
+	}
+}
+
+// A file system may treat names with no letter that has a case as one, as
+// Windows drops a trailing dot: the key 42. is not written into record 42's
+// folder, whatever rule the file system folds names by.
+func TestCaseFold_UncasedASCIIAlias(t *testing.T) {
+	root := t.TempDir()
+	withFoldFS(t, root, func(fileSystem) fileSystem { return foldFS{root: root, trimDots: true} })
+	writeFiles(t, root, map[string]string{"people/$records/42/index.yaml": "title: 42\n"})
+	db, err := NewLocalDBWithDef(root, dirRecordsDef(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := dalrecord.NewKeyWithID("people", "42.")
+	if err := setTitle(context.Background(), db, key, "42."); !errors.Is(err, ErrNameDiffersInCase) || !strings.Contains(err.Error(), `"42."`) {
+		t.Errorf("Set 42. over 42: %v", err)
+	}
+	if got := readFile(t, filepath.Join(root, "people", "$records", "42", "index.yaml")); got != "title: 42\n" {
+		t.Errorf("42/index.yaml: %q", got)
 	}
 }

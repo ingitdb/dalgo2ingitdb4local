@@ -39,9 +39,9 @@ func keyedRecordPath(colDef *ingitdb.CollectionDef, recordKey string) (string, e
 }
 
 // ErrNameDiffersInCase reports a record file whose name differs from an
-// existing one only in letter case: on a case-insensitive file system both
-// would be one file.
-var ErrNameDiffersInCase = errors.New("record file name differs from an existing one only in letter case")
+// existing one only in a way the file system ignores, such as letter case or
+// Unicode normalisation: on such a file system both would be one file.
+var ErrNameDiffersInCase = errors.New("record file name differs from an existing one only in letter case, Unicode normalisation or another way the file system ignores")
 
 // checkNoCaseCollision refuses to create the record file at path when the
 // collection declares a key encoding and path, or a directory on it below

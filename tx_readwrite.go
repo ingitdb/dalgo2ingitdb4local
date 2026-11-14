@@ -113,7 +113,11 @@ func (r readwriteTx) Delete(ctx context.Context, key *dalrecord.Key) error {
 		delete(allRecords, recordKey)
 		return writeMapOfRecordsFile(path, colDef, allRecords)
 	default:
-		return deleteRecordFile(path)
+		if err := deleteRecordFile(path); err != nil {
+			return err
+		}
+		r.names.removed(path)
+		return nil
 	}
 }
 

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/dal-go/dalgo/dal"
 	dalrecord "github.com/dal-go/record"
@@ -35,16 +35,19 @@ import (
 //     name fails every operation with ErrNameDiffersInCase. The definition
 //     and the disk disagree, and an empty answer would hide that.
 //
-// Whether a folder folds names is found out on the folder itself (folds):
-// the name in the other case is the same file (os.SameFile) or it is not. A
-// name with a non-ASCII letter is always checked against the listing, since
-// its normalisation forms cannot be probed without a Unicode table. The
+// Whether a folder folds names is found out on the folder itself, whatever
+// rule it folds them by: every existing entry on a record's path is looked
+// up in its folder's listing, and an entry the file system finds under a
+// name the listing does not show is on disk under another name. The
 // operating system's name decides nothing: case-sensitive APFS volumes, and
 // case-sensitive folders on Windows, exist.
 //
 // The listings are read once per transaction (dirCache) and updated by the
-// transaction's own writes. A bulk write of N records into one folder lists
-// that folder once, not N times.
+// transaction's own writes and deletes. A bulk write of N records into one
+// folder lists that folder once, not N times. The driver is not safe for
+// concurrent use, and that holds across processes too: a name another
+// process deletes and re-creates under another name during a transaction is
+// still taken, for the rest of the transaction, to be the name it listed.
 
 // dirCache holds the names in each folder a transaction has listed, keyed by
 // the folder's absolute path. A nil dirCache lists every time.
@@ -90,6 +93,16 @@ func (c *dirCache) wrote(path string) {
 	}
 }
 
+// removed records that path, which a transaction deleted, is no longer in its
+// folder.
+func (c *dirCache) removed(path string) {
+	if c == nil {
+		return
+	}
+	p := absPath(path)
+	delete(c.names[filepath.Dir(p)], filepath.Base(p))
+}
+
 // absPath is p made absolute, so a relative and an absolute path compare.
 func absPath(p string) string {
 	if abs, err := filepath.Abs(p); err == nil {
@@ -111,7 +124,7 @@ func (m *sameName) shownOnDisk() string {
 	if m.onDisk == "" {
 		return "another name this file system treats as the same"
 	}
-	return m.onDisk
+	return shown(m.onDisk)
 }
 
 // caseVariant reports the first entry on path, below root, that exists on
@@ -134,14 +147,12 @@ func caseVariant(cache *dirCache, root, path string) (*sameName, error) {
 		if statErr != nil {
 			return nil, nil
 		}
-		if folds(dir, name, info) {
-			names, err := cache.list(dir)
-			if err != nil {
-				return nil, err
-			}
-			if !names[name] {
-				return &sameName{given: given, onDisk: sameFileIn(dir, names, info), rest: path[len(given):]}, nil
-			}
+		names, err := cache.list(dir)
+		if err != nil {
+			return nil, err
+		}
+		if !names[name] {
+			return &sameName{given: given, onDisk: sameFileIn(dir, names, info), rest: path[len(given):]}, nil
 		}
 		dir = given
 	}
@@ -159,20 +170,14 @@ func sameFileIn(dir string, names map[string]bool, info os.FileInfo) string {
 	return ""
 }
 
-// folds reports whether dir may hold name, the existing entry described by
-// info, under another name. That is so when name in the other case is the
-// same file, or when name has a non-ASCII rune, whose normalisation forms
-// are not probed.
-func folds(dir, name string, info os.FileInfo) bool {
-	if !isASCII(name) {
-		return true
+// shown is s as an error message shows it: quoted in ASCII when it has a
+// non-ASCII rune, so that two names in different Unicode normalisation
+// forms read differently.
+func shown(s string) string {
+	if isASCII(s) {
+		return s
 	}
-	variant := swapCase(name)
-	if variant == name {
-		return false // no letter with a case: nothing to fold
-	}
-	other, err := fsys.Lstat(filepath.Join(dir, variant))
-	return err == nil && os.SameFile(info, other)
+	return strconv.QuoteToASCII(s)
 }
 
 func isASCII(s string) bool {
@@ -182,17 +187,6 @@ func isASCII(s string) bool {
 		}
 	}
 	return true
-}
-
-// swapCase turns every upper-case letter of s to lower case and every other
-// letter to upper case.
-func swapCase(s string) string {
-	return strings.Map(func(r rune) rune {
-		if unicode.IsUpper(r) {
-			return unicode.ToLower(r)
-		}
-		return unicode.ToUpper(r)
-	}, s)
 }
 
 // keyNames is the folders and file of a record's path that are named by a
@@ -228,8 +222,8 @@ func (k keyNames) isKeyName(path string) bool {
 // layoutError is the error of any operation whose path goes through m, a
 // folder of the definition's layout that is on disk under another name.
 func layoutError(colDef *ingitdb.CollectionDef, m *sameName) error {
-	return fmt.Errorf("%w: collection %s: the definition puts its records below %s, but this file system holds that folder as %s, a name that differs only in letter case or Unicode normalisation: rename the folder or fix the definition so that the two agree",
-		ErrNameDiffersInCase, colDef.ID, m.given, m.shownOnDisk())
+	return fmt.Errorf("%w: collection %s: the definition puts its records below %s, but this file system holds that folder as %s, a name it treats as the same (it differs in letter case, Unicode normalisation or another way the file system ignores): rename the folder or fix the definition so that the two agree",
+		ErrNameDiffersInCase, colDef.ID, shown(m.given), m.shownOnDisk())
 }
 
 // otherRecord names the record whose file or folder m is, when it is one in
@@ -268,8 +262,8 @@ func (r readwriteTx) refuseCaseVariant(colDef *ingitdb.CollectionDef, key *dalre
 	if err != nil || m == nil {
 		return err
 	}
-	return fmt.Errorf("%w: record %q of collection %s would be written to %s, but this file system does not tell letter case or Unicode normalisation apart, and holds %s as %s%s: writing would overwrite it. Use a key that differs in more than that, or a case-sensitive file system. To rename a record to such a key, delete the old record first (an exact key deletes it), then set the new one: the old record's folder of subcollections stays where it is, and records below the new key are refused until that folder is renamed",
-		ErrNameDiffersInCase, recordKey, colDef.ID, path, m.given, m.shownOnDisk(), otherRecord(colDef, k, m))
+	return fmt.Errorf("%w: record %q of collection %s would be written to %s, but this file system treats that name and another one as the same, and holds %s as %s%s: writing would overwrite it. Use a key whose name differs in more than letter case, Unicode normalisation or another way the file system ignores, or a file system that tells such names apart. To rename a record to such a key, delete the old record first (an exact key deletes it), then set the new one: the old record's folder of subcollections stays where it is, and records below the new key are refused until that folder is renamed",
+		ErrNameDiffersInCase, recordKey, colDef.ID, shown(path), shown(m.given), m.shownOnDisk(), otherRecord(colDef, k, m))
 }
 
 // caseVariantNotFound is the error of a Get or Delete of recordKey at path
@@ -280,8 +274,8 @@ func (r readonlyTx) caseVariantNotFound(colDef *ingitdb.CollectionDef, parent *d
 	if err != nil || m == nil {
 		return err
 	}
-	return fmt.Errorf("%w: record %q of collection %s: %s is on disk as %s%s, a name that differs only in letter case or Unicode normalisation (%w), and is not that record",
-		dalrecord.ErrRecordNotFound, recordKey, colDef.ID, m.given, m.shownOnDisk(), otherRecord(colDef, k, m), ErrNameDiffersInCase)
+	return fmt.Errorf("%w: record %q of collection %s: %s is on disk as %s%s, a name the file system treats as the same (%w), and is not that record",
+		dalrecord.ErrRecordNotFound, recordKey, colDef.ID, shown(m.given), m.shownOnDisk(), otherRecord(colDef, k, m), ErrNameDiffersInCase)
 }
 
 // queryTarget is the folder (or, for a collection in one file, the file) a
