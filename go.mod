@@ -10,6 +10,7 @@ require (
 	github.com/ingitdb/dalgo2ingitdb v0.9.0
 	github.com/ingitdb/ingitdb-go/ingitdb v0.11.0
 	github.com/pelletier/go-toml/v2 v2.4.3
+	golang.org/x/sys v0.50.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -21,5 +22,4 @@ require (
 	github.com/mschoch/smat v0.2.0 // indirect
 	github.com/strongo/random v0.0.3 // indirect
 	go.starlark.net v0.0.0-20261021141710-4f4267fb140d // indirect
-	golang.org/x/sys v0.50.0 // indirect
 )

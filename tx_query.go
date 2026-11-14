@@ -29,6 +29,17 @@ func executeQueryToRecordsReader(ctx context.Context, r readonlyTx, query dal.Qu
 	// collectionFromQuery already validated that query is a StructuredQuery.
 	sq, _ := query.(dal.StructuredQuery)
 
+	// A parent record's folder under another name the file system treats as
+	// the same holds another record's data (casefold.go): Get finds no record
+	// there, nor does a query.
+	variant, err := r.queryReadsCaseVariant(colDef, query)
+	if err != nil {
+		return nil, err
+	}
+	if variant {
+		return newSliceRecordsReader(nil), nil
+	}
+
 	// Read all records from disk.
 	allRecords, err := readAllRecordsFromDisk(colDef)
 	if err != nil {
@@ -216,7 +227,7 @@ func readAllSingleStored(colDef *ingitdb.CollectionDef) ([]dalgo2ingitdb.KeyedSt
 	nameTemplate := colDef.RecordFile.Name
 	globPattern := strings.ReplaceAll(nameTemplate, "{key}", "*")
 	basePath := filepath.Join(colDef.DirPath, colDef.RecordFile.RecordsBasePath())
-	matches, err := filepath.Glob(filepath.Join(basePath, globPattern))
+	matches, err := fsys.Glob(filepath.Join(basePath, globPattern))
 	if err != nil {
 		return nil, fmt.Errorf("failed to glob records in %s: %w", basePath, err)
 	}
@@ -290,7 +301,7 @@ func readAllMapStored(colDef *ingitdb.CollectionDef) ([]dalgo2ingitdb.KeyedStore
 // identity, not a source column.
 func readAllListStored(colDef *ingitdb.CollectionDef) ([]dalgo2ingitdb.KeyedStored, error) {
 	path := resolveRecordPath(colDef, "")
-	content, err := os.ReadFile(path)
+	content, err := fsys.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}

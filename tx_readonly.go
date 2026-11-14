@@ -16,6 +16,9 @@ var _ dal.ReadTransaction = (*readonlyTx)(nil)
 
 type readonlyTx struct {
 	db localDB
+	// names caches folder listings for the case-folding checks
+	// (casefold.go); nil lists every time.
+	names *dirCache
 }
 
 func (r readonlyTx) Options() dal.TransactionOptions {
@@ -31,6 +34,15 @@ func (r readonlyTx) Get(ctx context.Context, record dalrecord.Record) error {
 	}
 	path, err := keyedRecordPath(colDef, recordKey)
 	if err != nil {
+		return err
+	}
+	// A file under a name that differs only in case is another record's
+	// (casefold.go).
+	if err := r.caseVariantNotFound(colDef, record.Key().Parent(), recordKey, path); err != nil {
+		if dalrecord.IsNotFound(err) {
+			record.SetError(err)
+			return nil
+		}
 		return err
 	}
 	switch colDef.RecordFile.RecordType {
@@ -143,6 +155,13 @@ func (r readonlyTx) ExecuteQueryToRecordsetReader(_ context.Context, query dal.Q
 	colDef, err := collectionFromQuery(r.db.def, query)
 	if err != nil {
 		return nil, err
+	}
+	variant, err := r.queryReadsCaseVariant(colDef, query)
+	if err != nil {
+		return nil, err
+	}
+	if variant {
+		return dalgo2ingitdb.NewRecordsetReader(dalgo2ingitdb.BuildRecordset(colDef, nil)), nil
 	}
 	stored, err := readAllStoredRecords(colDef)
 	if err != nil {

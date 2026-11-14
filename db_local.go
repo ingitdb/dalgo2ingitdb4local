@@ -52,13 +52,13 @@ func (db localDB) Schema() dal.Schema {
 
 // RunReadonlyTransaction pull recent changes from origin (if URL to remote repo is specified)
 func (db localDB) RunReadonlyTransaction(ctx context.Context, f dal.ROTxWorker, options ...dal.TransactionOption) error {
-	tx := readonlyTx{db: db}
+	tx := readonlyTx{db: db, names: newDirCache()}
 	return f(ctx, tx)
 }
 
 // RunReadwriteTransaction pull recent changes from origin and creates a new local branch
 func (db localDB) RunReadwriteTransaction(ctx context.Context, f dal.RWTxWorker, options ...dal.TransactionOption) error {
-	tx := readwriteTx{readonlyTx: readonlyTx{db: db}}
+	tx := readwriteTx{readonlyTx: readonlyTx{db: db, names: newDirCache()}}
 	return f(ctx, tx)
 }
 
