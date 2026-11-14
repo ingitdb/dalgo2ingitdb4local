@@ -74,7 +74,8 @@ func resolveScopedCollection(def *ingitdb.Definition, collection string, parent 
 	dir := rootDir
 	// Walk the intermediate ancestors (root's children, grandchildren, ...).
 	for i := 1; i < len(ancestors); i++ {
-		parentID, err := parentDirName(cur, ancestors[i-1].id)
+		parentID := ancestors[i-1].id
+		name, err := parentDirName(cur, parentID)
 		if err != nil {
 			return nil, err
 		}
@@ -83,16 +84,17 @@ func resolveScopedCollection(def *ingitdb.Definition, collection string, parent 
 		if !ok {
 			return nil, fmt.Errorf("subcollection %q under %q not found in definition", subColID, cur.ID)
 		}
-		if err := checkNotMislaid(rootDir, dir, cur, parentID, subColID); err != nil {
+		if err := checkNotMislaid(rootDir, dir, cur, parentID, name, subColID); err != nil {
 			return nil, err
 		}
-		dir = filepath.Join(dir, recordsBasePath(cur), parentID, subColID)
+		dir = filepath.Join(dir, recordsBasePath(cur), name, subColID)
 		cur = sub
 	}
 
 	// Descend into the target collection as a subcollection of the deepest
 	// ancestor record.
-	parentID, err := parentDirName(cur, ancestors[len(ancestors)-1].id)
+	parentID := ancestors[len(ancestors)-1].id
+	name, err := parentDirName(cur, parentID)
 	if err != nil {
 		return nil, err
 	}
@@ -100,10 +102,10 @@ func resolveScopedCollection(def *ingitdb.Definition, collection string, parent 
 	if !ok {
 		return nil, fmt.Errorf("subcollection %q under %q not found in definition", collection, cur.ID)
 	}
-	if err := checkNotMislaid(rootDir, dir, cur, parentID, collection); err != nil {
+	if err := checkNotMislaid(rootDir, dir, cur, parentID, name, collection); err != nil {
 		return nil, err
 	}
-	dir = filepath.Join(dir, recordsBasePath(cur), parentID, collection)
+	dir = filepath.Join(dir, recordsBasePath(cur), name, collection)
 	if !within(rootDir, dir) {
 		return nil, fmt.Errorf("%w: %s", ErrParentKeyEscapes, dir)
 	}
@@ -132,18 +134,18 @@ func parentDirName(cur *ingitdb.CollectionDef, id string) (string, error) {
 var ErrParentKeyEscapes = errors.New("parent record ID leads outside the collection directory")
 
 // checkNotMislaid reports ErrMislaidSubCollection when the instance of
-// subcollection sub under parent record parentID of collection cur, whose
-// defined directory is parentDir (cur's resolved DirPath), has files at
-// <parentDir>/<parentID>/<sub>/ although cur keeps its records in a records
+// subcollection sub under parent record parentID (directory name name) of
+// collection cur, whose defined directory is parentDir (cur's resolved
+// DirPath), has files at <parentDir>/<name>/<sub>/ although cur keeps its records in a records
 // directory: the layout this adapter wrote before. It is checked at every
 // level, so a deeper instance below a mislaid ancestor is reported too (the
 // count is recursive). Nothing outside rootDir is read.
-func checkNotMislaid(rootDir, parentDir string, cur *ingitdb.CollectionDef, parentID, sub string) error {
+func checkNotMislaid(rootDir, parentDir string, cur *ingitdb.CollectionDef, parentID, name, sub string) error {
 	base := recordsBasePath(cur)
-	if base == "" || parentID == recordsDirHead(base) {
+	if base == "" || name == recordsDirHead(base) {
 		return nil // no other layout, or the path is inside the records directory itself
 	}
-	found := filepath.Join(parentDir, parentID, sub)
+	found := filepath.Join(parentDir, name, sub)
 	if !within(rootDir, found) {
 		return fmt.Errorf("%w: %s", ErrParentKeyEscapes, found)
 	}
@@ -151,7 +153,7 @@ func checkNotMislaid(rootDir, parentDir string, cur *ingitdb.CollectionDef, pare
 	if files == 0 {
 		return nil
 	}
-	expected := filepath.Join(parentDir, base, parentID, sub)
+	expected := filepath.Join(parentDir, base, name, sub)
 	return fmt.Errorf("%w: subcollection %s/%s of parent record %q: %s holds %d file(s), but the definition puts them at %s (%s keeps its records in record_file.records_dir %q). Move them there, or set record_file.records_dir: \".\" on %s and move its own records out of its records directory",
 		ErrMislaidSubCollection, cur.ID, sub, parentID, found, files, expected, cur.ID, base, cur.ID)
 }

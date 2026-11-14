@@ -42,7 +42,7 @@ func (r readwriteTx) Set(ctx context.Context, record dalrecord.Record) error {
 	if err != nil {
 		return err
 	}
-	if err := checkNoCaseCollision(colDef, recordKey, path); err != nil {
+	if err := checkNoCaseCollision(r.db.rootDirPath, colDef, recordKey, path); err != nil {
 		return err
 	}
 	switch colDef.RecordFile.RecordType {
@@ -139,7 +139,7 @@ func (r readwriteTx) Insert(ctx context.Context, record dalrecord.Record, opts .
 	if err != nil {
 		return err
 	}
-	if err := checkNoCaseCollision(colDef, recordKey, path); err != nil {
+	if err := checkNoCaseCollision(r.db.rootDirPath, colDef, recordKey, path); err != nil {
 		return err
 	}
 	switch colDef.RecordFile.RecordType {

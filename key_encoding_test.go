@@ -129,7 +129,7 @@ func TestKeyEncoding_TildeV1Refusals(t *testing.T) {
 		},
 	} {
 		err := db.RunReadwriteTransaction(ctx, func(_ context.Context, tx dal.ReadwriteTransaction) error { return write(tx) })
-		if !errors.Is(err, ErrNameDiffersInCase) || !strings.Contains(err.Error(), "ab.yaml exists there") {
+		if !errors.Is(err, ErrNameDiffersInCase) || !strings.Contains(err.Error(), "ab.yaml exists;") {
 			t.Errorf("case-only difference: %v", err)
 		}
 	}
@@ -157,6 +157,19 @@ func TestKeyEncoding_TildeV1Refusals(t *testing.T) {
 		t.Error("over-long ancestor accepted")
 	}
 
+	// A parent directory that differs only in case is refused too.
+	if err := setTitle(ctx, db, dalrecord.NewKeyWithParentAndID(dalrecord.NewKeyWithID("spaces", "Pq"), "notes", "n"), "x"); err != nil {
+		t.Fatal(err)
+	}
+	if err := setTitle(ctx, db, dalrecord.NewKeyWithParentAndID(dalrecord.NewKeyWithID("spaces", "pq"), "notes", "m"), "x"); !errors.Is(err, ErrNameDiffersInCase) || !strings.Contains(err.Error(), filepath.Join("$records", "Pq")+" exists") {
+		t.Errorf("parent directory differing in case: %v", err)
+	}
+	// A hidden file is not a record: a query skips it.
+	writeFiles(t, root, map[string]string{"spaces/$records/._ab.yaml": "title: n\n"})
+	if keys, err := queryKeys(t, db, dal.NewRootCollectionRef("spaces", "")); err != nil || strings.Join(keys, " ") != "ab" {
+		t.Errorf("hidden file: %q, %v", keys, err)
+	}
+
 	// A name the encoding never writes fails a query and a group read.
 	writeFiles(t, root, map[string]string{"spaces/$records/x~zz/notes/$records/n.yaml": "title: n\n"})
 	if _, err := SubCollectionParents(root, def, "spaces/notes"); !errors.Is(err, ingitdb.ErrInvalidKeyName) {
@@ -179,7 +192,66 @@ func TestKeyEncoding_NoneUnchanged(t *testing.T) {
 	if p, err := keyedRecordPath(col, "a b"); err != nil || p != filepath.Join("/db/c", "$records", "a b.yaml") {
 		t.Errorf("none: %q, %v", p, err)
 	}
-	if err := checkNoCaseCollision(col, "a", "/db/c/$records/a.yaml"); err != nil {
+	if err := checkNoCaseCollision("/db", col, "a", "/db/c/$records/a.yaml"); err != nil {
 		t.Errorf("none: %v", err)
+	}
+}
+
+// A foreign key holds the real id of a record in a collection with a key
+// encoding; the write check finds the record under its encoded name.
+func TestKeyEncoding_ForeignKeyToEncodedCollection(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	root := t.TempDir()
+	def := tildeSpacesNotes(root)
+	def.Collections["refs"] = &ingitdb.CollectionDef{ID: "refs", DirPath: filepath.Join(root, "refs"),
+		RecordFile:   &ingitdb.RecordFileDef{Name: "{key}.yaml", Format: ingitdb.RecordFormatYAML, RecordType: ingitdb.SingleRecord},
+		Columns:      map[string]*ingitdb.ColumnDef{"space": {Type: ingitdb.ColumnTypeString, ForeignKey: "spaces"}},
+		ColumnsOrder: []string{"space"}}
+	db, err := NewLocalDBWithDef(root, def)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"a/b", "CON"} {
+		if err := setTitle(ctx, db, dalrecord.NewKeyWithID("spaces", id), id); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
+			return tx.Set(ctx, dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("refs", "r"), map[string]any{"space": id}))
+		}); err != nil {
+			t.Errorf("foreign key %q: %v", id, err)
+		}
+	}
+	if err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
+		return tx.Set(ctx, dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("refs", "r"), map[string]any{"space": "a~2Fb"}))
+	}); err == nil {
+		t.Error("the encoded name is not the id: want a missing foreign key")
+	}
+}
+
+// A mislaid subcollection is reported with the parent's real id, and the
+// directory names it found and expects.
+func TestKeyEncoding_MislaidNamesTheRealID(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	db, err := NewLocalDBWithDef(root, tildeSpacesNotes(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFiles(t, root, map[string]string{"spaces/a~2Fb/notes/$records/n.yaml": "title: n\n"})
+	_, err = queryKeys(t, db, dal.NewCollectionRef("notes", "", dalrecord.NewKeyWithID("spaces", "a/b")))
+	if !errors.Is(err, ErrMislaidSubCollection) || !strings.Contains(err.Error(), `parent record "a/b"`) || !strings.Contains(err.Error(), filepath.Join("$records", "a~2Fb", "notes")) {
+		t.Errorf("got %v", err)
+	}
+}
+
+// Without a database root only the record file's own directory is checked.
+func TestCheckNoCaseCollision_NoRoot(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"Ab.yaml": ""})
+	col := &ingitdb.CollectionDef{RecordFile: &ingitdb.RecordFileDef{Name: "{key}.yaml", KeyEncoding: ingitdb.KeyEncodingTildeV1}}
+	if err := checkNoCaseCollision("", col, "ab", filepath.Join(dir, "ab.yaml")); !errors.Is(err, ErrNameDiffersInCase) {
+		t.Errorf("got %v", err)
 	}
 }
