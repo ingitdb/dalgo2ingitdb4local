@@ -29,7 +29,10 @@ func (r readonlyTx) Get(ctx context.Context, record dalrecord.Record) error {
 	if err != nil {
 		return err
 	}
-	path := resolveRecordPath(colDef, recordKey)
+	path, err := keyedRecordPath(colDef, recordKey)
+	if err != nil {
+		return err
+	}
 	switch colDef.RecordFile.RecordType {
 	case ingitdb.SingleRecord:
 		var (

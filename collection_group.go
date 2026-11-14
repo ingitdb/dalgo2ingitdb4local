@@ -72,9 +72,16 @@ func SubCollectionParents(root string, def *ingitdb.Definition, schemaPath strin
 				return nil, fmt.Errorf("%w: %s (subcollection %s); it is not read",
 					ErrParentOutsideDatabase, filepath.Join(parentsDir, outside[0], subID), schemaPath)
 			}
-			for _, key := range keys {
+			for _, name := range keys {
+				key, err := name, error(nil)
+				if colDef.RecordFile != nil {
+					key, err = colDef.RecordFile.DecodeKey(name)
+				}
+				if err != nil {
+					return nil, fmt.Errorf("parent directory %s (subcollection %s): %w", filepath.Join(parentsDir, name), schemaPath, err)
+				}
 				next = append(next, instance{
-					dir:    filepath.Join(parentsDir, key, subID),
+					dir:    filepath.Join(parentsDir, name, subID),
 					parent: dalrecord.NewKeyWithParentAndID(inst.parent, collection, key),
 				})
 			}

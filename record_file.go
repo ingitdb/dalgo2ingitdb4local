@@ -18,6 +18,40 @@ import (
 
 // resolveRecordPath replaces all {key} occurrences in the record file name template and joins with the collection dir.
 // When {key} is present, records are stored under a $records/ subdirectory to keep README.md visible on GitHub.com.
+// keyedRecordPath is resolveRecordPath for a record key: with a declared
+// record_file.key_encoding the key is encoded first, and a key too long for
+// one file per record fails with ingitdb.ErrKeyNotStorable.
+func keyedRecordPath(colDef *ingitdb.CollectionDef, recordKey string) (string, error) {
+	rf := colDef.RecordFile
+	if !rf.EncodesKeys() || !strings.Contains(rf.Name, "{key}") {
+		return resolveRecordPath(colDef, recordKey), nil
+	}
+	if err := rf.CheckKeyFits(recordKey); err != nil {
+		return "", err
+	}
+	name, _ := rf.EncodeKey(recordKey) // CheckKeyFits encoded it
+	return resolveRecordPath(colDef, name), nil
+}
+
+// ErrNameDiffersInCase reports a record file whose name differs from an
+// existing one only in letter case: on a case-insensitive file system both
+// would be one file.
+var ErrNameDiffersInCase = errors.New("record file name differs from an existing one only in letter case")
+
+// checkNoCaseCollision refuses to create the record file at path when the
+// collection declares a key encoding and its directory holds a name equal to
+// path's when letter case is ignored.
+func checkNoCaseCollision(colDef *ingitdb.CollectionDef, recordKey, path string) error {
+	if !colDef.RecordFile.EncodesKeys() || !strings.Contains(colDef.RecordFile.Name, "{key}") {
+		return nil
+	}
+	if existing, found := ingitdb.NameDifferingInCase(filepath.Dir(path), filepath.Base(path)); found {
+		return fmt.Errorf("%w: record %q would be written to %s, but %s exists there; on a case-insensitive file system (Windows, macOS by default) they are one file: use a key that differs in more than letter case",
+			ErrNameDiffersInCase, recordKey, filepath.Base(path), existing)
+	}
+	return nil
+}
+
 func resolveRecordPath(colDef *ingitdb.CollectionDef, recordKey string) string {
 	name := strings.ReplaceAll(colDef.RecordFile.Name, "{key}", recordKey)
 	base := colDef.RecordFile.RecordsBasePath()

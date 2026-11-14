@@ -235,6 +235,10 @@ func readAllSingleStored(colDef *ingitdb.CollectionDef) ([]dalgo2ingitdb.KeyedSt
 		if recordKey == "" {
 			continue
 		}
+		recordKey, err = colDef.RecordFile.DecodeKey(recordKey)
+		if err != nil {
+			return nil, fmt.Errorf("record file %s: %w", match, err)
+		}
 		var (
 			data    map[string]any
 			found   bool

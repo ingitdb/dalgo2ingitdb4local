@@ -74,7 +74,10 @@ func resolveScopedCollection(def *ingitdb.Definition, collection string, parent 
 	dir := rootDir
 	// Walk the intermediate ancestors (root's children, grandchildren, ...).
 	for i := 1; i < len(ancestors); i++ {
-		parentID := ancestors[i-1].id
+		parentID, err := parentDirName(cur, ancestors[i-1].id)
+		if err != nil {
+			return nil, err
+		}
 		subColID := ancestors[i].col
 		sub, ok := cur.SubCollections[subColID]
 		if !ok {
@@ -89,7 +92,10 @@ func resolveScopedCollection(def *ingitdb.Definition, collection string, parent 
 
 	// Descend into the target collection as a subcollection of the deepest
 	// ancestor record.
-	parentID := ancestors[len(ancestors)-1].id
+	parentID, err := parentDirName(cur, ancestors[len(ancestors)-1].id)
+	if err != nil {
+		return nil, err
+	}
 	target, ok := cur.SubCollections[collection]
 	if !ok {
 		return nil, fmt.Errorf("subcollection %q under %q not found in definition", collection, cur.ID)
@@ -110,6 +116,16 @@ func resolveScopedCollection(def *ingitdb.Definition, collection string, parent 
 // ErrMislaidSubCollection reports subcollection records found where the
 // definition does not put them (see resolveScopedCollection).
 var ErrMislaidSubCollection = errors.New("subcollection records outside the location the definition defines")
+
+// parentDirName returns the directory name of parent record id of collection
+// cur: the id under cur's record_file.key_encoding (as it is when cur
+// declares none).
+func parentDirName(cur *ingitdb.CollectionDef, id string) (string, error) {
+	if cur.RecordFile == nil {
+		return id, nil
+	}
+	return cur.RecordFile.KeyDirName(id)
+}
 
 // ErrParentKeyEscapes reports a parent record ID (such as "..") that would
 // place a subcollection outside the root collection's directory.

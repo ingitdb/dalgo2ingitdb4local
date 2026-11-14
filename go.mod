@@ -8,7 +8,7 @@ require (
 	github.com/dal-go/dalgo v0.102.1
 	github.com/dal-go/record v0.1.5
 	github.com/ingitdb/dalgo2ingitdb v0.7.12
-	github.com/ingitdb/ingitdb-go/ingitdb v0.10.7-0.20261114022844-05f645783355
+	github.com/ingitdb/ingitdb-go/ingitdb v0.10.7-0.20261114025056-ce1e18920afe
 	github.com/pelletier/go-toml/v2 v2.4.3
 	gopkg.in/yaml.v3 v3.0.1
 )

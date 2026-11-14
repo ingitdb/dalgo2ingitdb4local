@@ -38,7 +38,13 @@ func (r readwriteTx) Set(ctx context.Context, record dalrecord.Record) error {
 	if err := dalgo2ingitdb.ValidateWrite(r.db.def, "Set", colDef.ID, colDef, recordKey, data); err != nil {
 		return err
 	}
-	path := resolveRecordPath(colDef, recordKey)
+	path, err := keyedRecordPath(colDef, recordKey)
+	if err != nil {
+		return err
+	}
+	if err := checkNoCaseCollision(colDef, recordKey, path); err != nil {
+		return err
+	}
 	switch colDef.RecordFile.RecordType {
 	case ingitdb.MapOfRecords:
 		allRecords, _, err := readMapOfRecordsFile(path, colDef.RecordFile.Format)
@@ -72,7 +78,10 @@ func (r readwriteTx) Delete(ctx context.Context, key *dalrecord.Key) error {
 	if err := dalgo2ingitdb.ValidateDelete(r.db.def, colDef.ID, recordKey); err != nil {
 		return err
 	}
-	path := resolveRecordPath(colDef, recordKey)
+	path, err := keyedRecordPath(colDef, recordKey)
+	if err != nil {
+		return err
+	}
 	switch colDef.RecordFile.RecordType {
 	case ingitdb.MapOfRecords:
 		allRecords, found, err := readMapOfRecordsFile(path, colDef.RecordFile.Format)
@@ -126,7 +135,13 @@ func (r readwriteTx) Insert(ctx context.Context, record dalrecord.Record, opts .
 	if err := dalgo2ingitdb.ValidateWrite(r.db.def, "Insert", colDef.ID, colDef, recordKey, data); err != nil {
 		return err
 	}
-	path := resolveRecordPath(colDef, recordKey)
+	path, err := keyedRecordPath(colDef, recordKey)
+	if err != nil {
+		return err
+	}
+	if err := checkNoCaseCollision(colDef, recordKey, path); err != nil {
+		return err
+	}
 	switch colDef.RecordFile.RecordType {
 	case ingitdb.MapOfRecords:
 		allRecords, _, err := readMapOfRecordsFile(path, colDef.RecordFile.Format)
