@@ -155,6 +155,20 @@ func TestSubCollectionParents_MislaidFails(t *testing.T) {
 	if err != nil || len(parents) != 1 || parents[0].String() != "spaces/s9/ext/calendarius" {
 		t.Fatalf("records_dir .: %v, %v", parents, err)
 	}
+	// With records_dir data/ext the parent's own records directory, whose
+	// first segment "data" holds "ext", is not taken for mislaid data.
+	root = t.TempDir()
+	writeFiles(t, root, map[string]string{
+		"spaces/data/ext/s1.yaml":                                "title: S1\n",
+		"spaces/data/ext/s1/ext/$records/c/days/$records/d.yaml": "title: X\n",
+	})
+	def = collectionGroupDef(root)
+	nested := "data/ext"
+	def.Collections["spaces"].RecordFile.RecordsDir = &nested
+	parents, err = SubCollectionParents(root, def, "spaces/ext/days")
+	if err != nil || len(parents) != 1 || parents[0].String() != "spaces/s1/ext/c" {
+		t.Fatalf("records_dir data/ext: %v, %v", parents, err)
+	}
 }
 
 func TestSubCollectionParents_RootAndErrors(t *testing.T) {
