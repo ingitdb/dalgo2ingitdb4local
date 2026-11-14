@@ -6,7 +6,7 @@ package dalgo2fsingitdb
 // keys sharing a leaf (contacts/c1) under different parents (spaces/family vs
 // spaces/work) collided on one file and clobbered each other. After the fix each
 // nested record is scoped under its parent record's directory
-// (spaces/<spaceID>/contacts/...), matching the dalgo2ingitdb and
+// (spaces/$records/<spaceID>/contacts/..., below its records directory), matching the dalgo2ingitdb and
 // dalgo2ingitdb4github siblings.
 
 import (
@@ -78,8 +78,8 @@ func TestResolveScopedCollection_DistinctPathsForSameLeaf(t *testing.T) {
 	familyPath := resolveRecordPath(familyDef, "c1")
 	workPath := resolveRecordPath(workDef, "c1")
 
-	wantFamily := filepath.Join(root, "spaces", "family", "contacts", "$records", "c1.yaml")
-	wantWork := filepath.Join(root, "spaces", "work", "contacts", "$records", "c1.yaml")
+	wantFamily := filepath.Join(root, "spaces", "$records", "family", "contacts", "$records", "c1.yaml")
+	wantWork := filepath.Join(root, "spaces", "$records", "work", "contacts", "$records", "c1.yaml")
 	if familyPath != wantFamily {
 		t.Errorf("family path = %q, want %q", familyPath, wantFamily)
 	}
@@ -99,7 +99,8 @@ func TestResolveScopedCollection_DistinctPathsForSameLeaf(t *testing.T) {
 
 // TestResolveScopedCollection_DeepNesting exercises the intermediate-ancestor
 // loop: a grandchild collection (spaces/{s}/projects/{p}/tasks/{t}) interleaves
-// every parent-record id and subcollection name into the on-disk path.
+// every parent-record id and subcollection name into the on-disk path, each
+// parent id inside its collection's records directory.
 func TestResolveScopedCollection_DeepNesting(t *testing.T) {
 	t.Parallel()
 	root := "/repo"
@@ -117,7 +118,7 @@ func TestResolveScopedCollection_DeepNesting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveScopedCollection: %v", err)
 	}
-	want := filepath.Join(root, "spaces", "s1", "projects", "p1", "tasks", "$records", "t1.yaml")
+	want := filepath.Join(root, "spaces", "$records", "s1", "projects", "$records", "p1", "tasks", "$records", "t1.yaml")
 	if got := resolveRecordPath(colDef, "t1"); got != want {
 		t.Errorf("deep nested path = %q, want %q", got, want)
 	}
@@ -155,8 +156,8 @@ func TestLocalDB_NestedKeys_ScopedByParentRecord(t *testing.T) {
 	}
 
 	// Physical layout: nested under the parent space, no collision.
-	familyPath := filepath.Join(root, "spaces", "family", "contacts", "$records", "c1.yaml")
-	workPath := filepath.Join(root, "spaces", "work", "contacts", "$records", "c1.yaml")
+	familyPath := filepath.Join(root, "spaces", "$records", "family", "contacts", "$records", "c1.yaml")
+	workPath := filepath.Join(root, "spaces", "$records", "work", "contacts", "$records", "c1.yaml")
 	if _, err := os.Stat(familyPath); err != nil {
 		t.Errorf("expected family contact file at %s: %v", familyPath, err)
 	}

@@ -235,6 +235,13 @@ func readAllSingleStored(colDef *ingitdb.CollectionDef) ([]dalgo2ingitdb.KeyedSt
 		if recordKey == "" {
 			continue
 		}
+		if colDef.RecordFile.EncodesKeys() && strings.HasPrefix(recordKey, ".") {
+			continue // a hidden file (editor lock, macOS "._"): the encoding never writes one
+		}
+		recordKey, err = colDef.RecordFile.DecodeKey(recordKey)
+		if err != nil {
+			return nil, fmt.Errorf("record file %s: %w", match, err)
+		}
 		var (
 			data    map[string]any
 			found   bool

@@ -18,6 +18,50 @@ import (
 
 // resolveRecordPath replaces all {key} occurrences in the record file name template and joins with the collection dir.
 // When {key} is present, records are stored under a $records/ subdirectory to keep README.md visible on GitHub.com.
+// keyedRecordPath is resolveRecordPath for a record key: with a declared
+// record_file.key_encoding the key is encoded first, and a key too long for
+// one file per record fails with ingitdb.ErrKeyNotStorable.
+func keyedRecordPath(colDef *ingitdb.CollectionDef, recordKey string) (string, error) {
+	rf := colDef.RecordFile
+	if !strings.Contains(rf.Name, "{key}") {
+		return resolveRecordPath(colDef, recordKey), nil
+	}
+	// The length rule holds for every one-record-per-file collection
+	// (record-key-encoding#req:over-long-key-fails).
+	if err := rf.CheckKeyFits(recordKey); err != nil {
+		return "", err
+	}
+	if !rf.EncodesKeys() {
+		return resolveRecordPath(colDef, recordKey), nil
+	}
+	name, _ := rf.EncodeKey(recordKey) // CheckKeyFits encoded it
+	return resolveRecordPath(colDef, name), nil
+}
+
+// ErrNameDiffersInCase reports a record file whose name differs from an
+// existing one only in letter case: on a case-insensitive file system both
+// would be one file.
+var ErrNameDiffersInCase = errors.New("record file name differs from an existing one only in letter case")
+
+// checkNoCaseCollision refuses to create the record file at path when the
+// collection declares a key encoding and path, or a directory on it below
+// root (a parent record's directory included), names an existing entry that
+// differs only in letter case. With an empty root only the record file's own
+// directory is checked.
+func checkNoCaseCollision(root string, colDef *ingitdb.CollectionDef, recordKey, path string) error {
+	if !colDef.RecordFile.EncodesKeys() || !strings.Contains(colDef.RecordFile.Name, "{key}") {
+		return nil
+	}
+	if root == "" {
+		root = filepath.Dir(path)
+	}
+	if existing, found := ingitdb.PathDifferingInCase(root, path); found {
+		return fmt.Errorf("%w: record %q would be written to %s, but %s exists; on a case-insensitive file system (Windows, macOS by default) they are one entry: use a key that differs in more than letter case",
+			ErrNameDiffersInCase, recordKey, path, existing)
+	}
+	return nil
+}
+
 func resolveRecordPath(colDef *ingitdb.CollectionDef, recordKey string) string {
 	name := strings.ReplaceAll(colDef.RecordFile.Name, "{key}", recordKey)
 	base := colDef.RecordFile.RecordsBasePath()
