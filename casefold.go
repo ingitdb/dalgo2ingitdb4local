@@ -38,9 +38,13 @@ import (
 // Whether a folder folds names is found out on the folder itself, whatever
 // rule it folds them by: every existing entry on a record's path is looked
 // up in its folder's listing, and an entry the file system finds under a
-// name the listing does not show is on disk under another name. The
-// operating system's name decides nothing: case-sensitive APFS volumes, and
-// case-sensitive folders on Windows, exist.
+// name the listing does not show is on disk under another name. A name the
+// file system does not find needs no listing: if another name stood for it,
+// the file system would find that. Nor does a folder the file system
+// reports to hold names exactly (fileSystem.ExactNames; on Linux, ext4,
+// btrfs, f2fs or tmpfs without the casefold flag). The operating system's
+// name decides nothing: case-sensitive APFS volumes, which still treat NFC
+// and NFD names as one, and case-sensitive folders on Windows, exist.
 //
 // The listings are read once per transaction (dirCache) and updated by the
 // transaction's own writes and deletes. A bulk write of N records into one
@@ -50,13 +54,30 @@ import (
 // still taken, for the rest of the transaction, to be the name it listed.
 
 // dirCache holds the names in each folder a transaction has listed, keyed by
-// the folder's absolute path. A nil dirCache lists every time.
+// the folder's absolute path, and whether each folder it asked holds names
+// exactly. A nil dirCache lists and asks every time.
 type dirCache struct {
 	names map[string]map[string]bool
+	exact map[string]bool
 }
 
 func newDirCache() *dirCache {
-	return &dirCache{names: make(map[string]map[string]bool)}
+	return &dirCache{names: make(map[string]map[string]bool), exact: make(map[string]bool)}
+}
+
+// exactNames reports whether dir holds every name exactly as it is given
+// (fileSystem.ExactNames): then no other name can find an entry in it, and
+// it need not be listed.
+func (c *dirCache) exactNames(dir string) bool {
+	if c == nil {
+		return fsys.ExactNames(dir)
+	}
+	exact, ok := c.exact[dir]
+	if !ok {
+		exact = fsys.ExactNames(dir)
+		c.exact[dir] = exact
+	}
+	return exact
 }
 
 // list returns the names in dir.
@@ -90,6 +111,18 @@ func (c *dirCache) wrote(path string) {
 		if names, ok := c.names[filepath.Dir(p)]; ok {
 			names[filepath.Base(p)] = true
 		}
+	}
+}
+
+// failed records that a write of path failed. It may have made some of the
+// folders on path, or the file, before it failed, so the listing of every
+// folder on path is read again when it is next needed.
+func (c *dirCache) failed(path string) {
+	if c == nil {
+		return
+	}
+	for p := absPath(path); filepath.Dir(p) != p; p = filepath.Dir(p) {
+		delete(c.names, filepath.Dir(p))
 	}
 }
 
@@ -145,7 +178,11 @@ func caseVariant(cache *dirCache, root, path string) (*sameName, error) {
 		given := filepath.Join(dir, name)
 		info, statErr := fsys.Lstat(given)
 		if statErr != nil {
-			return nil, nil
+			return nil, nil // nothing on disk, under this name or any other
+		}
+		if cache.exactNames(dir) {
+			dir = given
+			continue
 		}
 		names, err := cache.list(dir)
 		if err != nil {
@@ -237,7 +274,7 @@ func otherRecord(colDef *ingitdb.CollectionDef, k keyNames, m *sameName) string 
 	if err != nil || key == "" {
 		return ""
 	}
-	return fmt.Sprintf(" (the file of record %q)", key)
+	return fmt.Sprintf(" (the file of record %+q)", key)
 }
 
 // recordCaseVariant is the name on recordKey's path, at path, that is on
@@ -262,7 +299,7 @@ func (r readwriteTx) refuseCaseVariant(colDef *ingitdb.CollectionDef, key *dalre
 	if err != nil || m == nil {
 		return err
 	}
-	return fmt.Errorf("%w: record %q of collection %s would be written to %s, but this file system treats that name and another one as the same, and holds %s as %s%s: writing would overwrite it. Use a key whose name differs in more than letter case, Unicode normalisation or another way the file system ignores, or a file system that tells such names apart. To rename a record to such a key, delete the old record first (an exact key deletes it), then set the new one: the old record's folder of subcollections stays where it is, and records below the new key are refused until that folder is renamed",
+	return fmt.Errorf("%w: record %+q of collection %s would be written to %s, but this file system treats that name and another one as the same, and holds %s as %s%s: writing would overwrite it. Use a key whose name differs in more than letter case, Unicode normalisation or another way the file system ignores, or a file system that tells such names apart. To rename a record to such a key, delete the old record first (an exact key deletes it), then set the new one: the old record's folder of subcollections stays where it is, and records below the new key are refused until that folder is renamed",
 		ErrNameDiffersInCase, recordKey, colDef.ID, shown(path), shown(m.given), m.shownOnDisk(), otherRecord(colDef, k, m))
 }
 
@@ -274,7 +311,7 @@ func (r readonlyTx) caseVariantNotFound(colDef *ingitdb.CollectionDef, parent *d
 	if err != nil || m == nil {
 		return err
 	}
-	return fmt.Errorf("%w: record %q of collection %s: %s is on disk as %s%s, a name the file system treats as the same (%w), and is not that record",
+	return fmt.Errorf("%w: record %+q of collection %s: %s is on disk as %s%s, a name the file system treats as the same (%w), and is not that record",
 		dalrecord.ErrRecordNotFound, recordKey, colDef.ID, shown(m.given), m.shownOnDisk(), otherRecord(colDef, k, m), ErrNameDiffersInCase)
 }
 

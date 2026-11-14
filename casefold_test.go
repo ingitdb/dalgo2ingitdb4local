@@ -76,6 +76,7 @@ func (f foldFS) Remove(name string) error                   { return os.Remove(f
 func (f foldFS) Stat(name string) (fs.FileInfo, error)      { return os.Stat(f.resolve(name)) }
 func (f foldFS) Lstat(name string) (fs.FileInfo, error)     { return os.Lstat(f.resolve(name)) }
 func (f foldFS) ReadDir(name string) ([]fs.DirEntry, error) { return os.ReadDir(f.resolve(name)) }
+func (foldFS) ExactNames(string) bool                       { return false }
 
 // Glob matches, like filepath.Glob on a case-insensitive file system, the
 // names read from a folder case-sensitively, and returns the folders above the
@@ -344,13 +345,15 @@ func checkNormalisation(t *testing.T, root string) {
 		// The two names look the same, so the error quotes them in ASCII.
 		err := setTitle(context.Background(), db, key, "nfc")
 		if !errors.Is(err, ErrNameDiffersInCase) || !strings.Contains(err.Error(), strconv.QuoteToASCII(file)) ||
+			!strings.Contains(err.Error(), "record "+strconv.QuoteToASCII(nfcKey)) || !strings.Contains(err.Error(), "record "+strconv.QuoteToASCII(nfdName)) ||
 			!strings.Contains(err.Error(), strconv.QuoteToASCII(filepath.Join(root, "people", "$records", nfcKey+".yaml"))) {
 			t.Errorf("Set %q (NFC) over %q (NFD): %v", nfcKey, nfdName, err)
 		}
 		if err := insertTitle(db, key, "nfc"); !errors.Is(err, ErrNameDiffersInCase) {
 			t.Errorf("Insert %q (NFC): %v", nfcKey, err)
 		}
-		if err := deleteKey(db, key); !dalrecord.IsNotFound(err) || !errors.Is(err, ErrNameDiffersInCase) {
+		if err := deleteKey(db, key); !dalrecord.IsNotFound(err) || !errors.Is(err, ErrNameDiffersInCase) ||
+			!strings.Contains(err.Error(), "record "+strconv.QuoteToASCII(nfcKey)) {
 			t.Errorf("Delete %q (NFC): %v", nfcKey, err)
 		}
 		if exists, _, err := getTitle(db, key); err != nil || exists {
@@ -475,6 +478,7 @@ func TestCaseFold_Simulated(t *testing.T) {
 	for name, check := range map[string]func(*testing.T, string){
 		"normalisation": checkNormalisation, "layout": checkLayoutDiffersInCase, "relative": checkRelativeDirPath,
 		"delete-then-variant": checkDeleteThenCaseVariant, "same-key-twice": checkSameKeyTwice, "uncased-non-ascii-dir": checkUncasedNonASCIIDir,
+		"failed-write-retry": checkFailedWriteRetry,
 	} {
 		t.Run(name, func(t *testing.T) {
 			root := t.TempDir()
@@ -504,6 +508,7 @@ func TestCaseFold_RealFileSystem(t *testing.T) {
 	for name, check := range map[string]func(*testing.T, string){
 		"normalisation": checkNormalisation, "layout": checkLayoutDiffersInCase, "relative": checkRelativeDirPath,
 		"delete-then-variant": checkDeleteThenCaseVariant, "same-key-twice": checkSameKeyTwice, "uncased-non-ascii-dir": checkUncasedNonASCIIDir,
+		"failed-write-retry": checkFailedWriteRetry,
 	} {
 		t.Run(name, func(t *testing.T) {
 			root := t.TempDir()
@@ -629,23 +634,101 @@ func checkDeleteThenCaseVariant(t *testing.T, root string) {
 }
 
 // checkSameKeyTwice is the rule for a transaction's own writes: once a folder
-// is listed, a record the transaction creates there can be written again.
+// is listed, a record the transaction creates there, and the folders the
+// write creates on its way, can be written again. It holds with a file per
+// record and with a folder per record.
 func checkSameKeyTwice(t *testing.T, root string) {
 	t.Helper()
-	writeFiles(t, root, map[string]string{"people/$records/ann.yaml": "title: ann\n"})
+	for name, layout := range map[string]struct {
+		def  func(string) *ingitdb.Definition
+		file string // the record file below people/$records, {key} for the key
+	}{
+		"file":   {func(root string) *ingitdb.Definition { return caseFoldDef(root, "") }, "{key}.yaml"},
+		"folder": {dirRecordsDef, "{key}/index.yaml"},
+	} {
+		dir := filepath.Join(root, name)
+		file := func(key string) string { return strings.ReplaceAll(layout.file, "{key}", key) }
+		writeFiles(t, dir, map[string]string{"people/$records/" + file("ann"): "title: ann\n"})
+		db, err := NewLocalDBWithDef(dir, layout.def(dir))
+		if err != nil {
+			t.Fatal(err)
+		}
+		ann, cid := dalrecord.NewKeyWithID("people", "ann"), dalrecord.NewKeyWithID("people", "cid")
+		// Set ann lists the records folder; cid is then new in it.
+		for i, err := range runSteps(db, txStep{ann, "ann"}, txStep{cid, "cid"}, txStep{cid, "cid again"}) {
+			if err != nil {
+				t.Errorf("%s: step %d: %v", name, i+1, err)
+			}
+		}
+		if got := readFile(t, filepath.Join(dir, "people", "$records", file("cid"))); got != "title: cid again\n" {
+			t.Errorf("%s: cid: %q", name, got)
+		}
+	}
+}
+
+// checkFailedWriteRetry is the rule for a write that fails after it created
+// folders: the transaction does not take those folders for another name, so
+// the write can be retried in the same transaction.
+func checkFailedWriteRetry(t *testing.T, root string) {
+	t.Helper()
+	def := dirRecordsDef(root)
+	people := def.Collections["people"]
+	people.RecordFile.Name, people.RecordFile.Format = "{key}/index.json", ingitdb.RecordFormatJSON
+	writeFiles(t, root, map[string]string{"people/$records/ann/index.json": `{"title": "ann"}`})
+	db, err := NewLocalDBWithDef(root, def)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ann, bob := dalrecord.NewKeyWithID("people", "ann"), dalrecord.NewKeyWithID("people", "bob")
+	errs := make([]error, 3)
+	_ = db.RunReadwriteTransaction(context.Background(), func(ctx context.Context, tx dal.ReadwriteTransaction) error {
+		errs[0] = tx.Set(ctx, dalrecord.NewRecordWithData(ann, map[string]any{"title": "ann"}))
+		// JSON cannot encode a channel: the folder bob is made, the file is not.
+		errs[1] = tx.Set(ctx, dalrecord.NewRecordWithData(bob, map[string]any{"title": "bob", "x": make(chan int)}))
+		errs[2] = tx.Set(ctx, dalrecord.NewRecordWithData(bob, map[string]any{"title": "bob"}))
+		return nil
+	})
+	if errs[0] != nil || errs[1] == nil || errs[2] != nil {
+		t.Errorf("Set ann, Set bob that fails, Set bob again: %v", errs)
+	}
+	if got := readFile(t, filepath.Join(root, "people", "$records", "bob", "index.json")); !strings.Contains(got, `"title": "bob"`) {
+		t.Errorf("bob/index.json: %q", got)
+	}
+}
+
+// exactFS is a file system that reports, as an ext4 folder without the
+// casefold flag does, that it holds every name exactly as it is given.
+type exactFS struct{ fileSystem }
+
+func (exactFS) ExactNames(string) bool { return true }
+
+// On a file system that holds names exactly, no transaction lists a folder:
+// not for a new record, not for a rewrite of one, not for a Get or a Delete.
+func TestCaseFold_ExactNamesNeverList(t *testing.T) {
+	root, counts := t.TempDir(), map[string]int{}
+	saved := fsys
+	fsys = countReadDir{exactFS{osFS{}}, counts}
+	t.Cleanup(func() { fsys = saved })
 	db, err := NewLocalDBWithDef(root, caseFoldDef(root, ""))
 	if err != nil {
 		t.Fatal(err)
 	}
-	ann, cid := dalrecord.NewKeyWithID("people", "ann"), dalrecord.NewKeyWithID("people", "cid")
-	// Set ann lists the records folder; cid is then new in it.
-	for i, err := range runSteps(db, txStep{ann, "ann"}, txStep{cid, "cid"}, txStep{cid, "cid again"}) {
-		if err != nil {
-			t.Errorf("step %d: %v", i+1, err)
-		}
+	writeFiles(t, root, map[string]string{"people/$records/ann.yaml": "title: ann\n"})
+	ann, bob := dalrecord.NewKeyWithID("people", "ann"), dalrecord.NewKeyWithID("people", "bob")
+	if err := setTitle(context.Background(), db, bob, "bob"); err != nil {
+		t.Errorf("Set a new record: %v", err)
 	}
-	if got := readFile(t, filepath.Join(root, "people", "$records", "cid.yaml")); got != "title: cid again\n" {
-		t.Errorf("cid.yaml: %q", got)
+	if err := setTitle(context.Background(), db, ann, "ann 2"); err != nil {
+		t.Errorf("Set an existing record: %v", err)
+	}
+	if exists, _, err := getTitle(db, ann); err != nil || !exists {
+		t.Errorf("Get: %v %v", exists, err)
+	}
+	if err := deleteKey(db, bob); err != nil {
+		t.Errorf("Delete: %v", err)
+	}
+	if len(counts) != 0 {
+		t.Errorf("folders listed: %v", counts)
 	}
 }
 
@@ -699,3 +782,46 @@ func TestCaseFold_UncasedASCIIAlias(t *testing.T) {
 		t.Errorf("42/index.yaml: %q", got)
 	}
 }
+
+// BenchmarkSetOnePerTransaction is the cost of a transaction that rewrites
+// one record in a folder of 10,000: a folder that must be listed, and one
+// the file system reports to hold names exactly.
+func BenchmarkSetOnePerTransaction(b *testing.B) {
+	for name, wrap := range map[string]func(fileSystem) fileSystem{
+		"listed": func(f fileSystem) fileSystem { return f },
+		"exact":  func(f fileSystem) fileSystem { return exactFS{f} },
+	} {
+		b.Run(name, func(b *testing.B) {
+			root := b.TempDir()
+			dir := filepath.Join(root, "people", "$records")
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				b.Fatal(err)
+			}
+			for i := 0; i < 10000; i++ {
+				if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("p%d.yaml", i)), []byte("title: t\n"), 0o644); err != nil {
+					b.Fatal(err)
+				}
+			}
+			saved := fsys
+			fsys = wrap(listingFS{osFS{}})
+			b.Cleanup(func() { fsys = saved })
+			db, err := NewLocalDBWithDef(root, caseFoldDef(root, ""))
+			if err != nil {
+				b.Fatal(err)
+			}
+			key := dalrecord.NewKeyWithID("people", "p42")
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				if err := setTitle(context.Background(), db, key, "t"); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+// listingFS is the operating system's file system with every folder listed,
+// whatever file system it is on.
+type listingFS struct{ fileSystem }
+
+func (listingFS) ExactNames(string) bool { return false }

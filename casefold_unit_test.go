@@ -75,12 +75,13 @@ func TestCaseVariant_StaleListing(t *testing.T) {
 	}
 }
 
-// A nil dirCache lists every time and records nothing, written or removed; absPath makes a
-// relative path absolute.
+// A nil dirCache lists every time and records nothing, written, removed or
+// failed; absPath makes a relative path absolute.
 func TestDirCache_Nil(t *testing.T) {
 	var cache *dirCache
 	cache.wrote("x")
 	cache.removed("x")
+	cache.failed("x")
 	dir := t.TempDir()
 	if names, err := cache.list(dir); err != nil || len(names) != 0 {
 		t.Errorf("nil list: %v %v", names, err)

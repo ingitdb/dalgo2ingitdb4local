@@ -20,6 +20,9 @@ type fileSystem interface {
 	Lstat(name string) (fs.FileInfo, error)
 	ReadDir(name string) ([]fs.DirEntry, error)
 	Glob(pattern string) ([]string, error)
+	// ExactNames reports whether the folder dir holds every name exactly as
+	// it is given, so that no other name finds an entry in it.
+	ExactNames(dir string) bool
 }
 
 // osFS is the file system of the operating system.

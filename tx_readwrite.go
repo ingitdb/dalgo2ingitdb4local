@@ -67,10 +67,12 @@ func (r readwriteTx) Set(ctx context.Context, record dalrecord.Record) error {
 	}
 }
 
-// written records a successful write of path in the transaction's folder
-// listings (casefold.go) and returns err.
+// written records a write of path in the transaction's folder listings
+// (casefold.go), whether it succeeded or failed, and returns err.
 func (r readwriteTx) written(path string, err error) error {
-	if err == nil {
+	if err != nil {
+		r.names.failed(path)
+	} else {
 		r.names.wrote(path)
 	}
 	return err
