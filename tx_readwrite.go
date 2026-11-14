@@ -45,7 +45,7 @@ func (r readwriteTx) Set(ctx context.Context, record dalrecord.Record) error {
 	if err := checkNoCaseCollision(r.db.rootDirPath, colDef, recordKey, path); err != nil {
 		return err
 	}
-	if err := refuseCaseVariant(r.db.rootDirPath, colDef, recordKey, path); err != nil {
+	if err := r.refuseCaseVariant(colDef, record.Key(), recordKey, path); err != nil {
 		return err
 	}
 	switch colDef.RecordFile.RecordType {
@@ -58,13 +58,22 @@ func (r readwriteTx) Set(ctx context.Context, record dalrecord.Record) error {
 			allRecords = make(map[string]map[string]any)
 		}
 		allRecords[recordKey] = ingitdb.ApplyLocaleToWrite(data, colDef.Columns)
-		return writeMapOfRecordsFile(path, colDef, allRecords)
+		return r.written(path, writeMapOfRecordsFile(path, colDef, allRecords))
 	default:
 		if colDef.RecordFile.Format == ingitdb.RecordFormatMarkdown {
-			return writeMarkdownRecord(path, colDef, data)
+			return r.written(path, writeMarkdownRecord(path, colDef, data))
 		}
-		return writeRecordToFile(path, colDef.RecordFile.Format, data)
+		return r.written(path, writeRecordToFile(path, colDef.RecordFile.Format, data))
 	}
+}
+
+// written records a successful write of path in the transaction's folder
+// listings (casefold.go) and returns err.
+func (r readwriteTx) written(path string, err error) error {
+	if err == nil {
+		r.names.wrote(path)
+	}
+	return err
 }
 
 func (r readwriteTx) SetMulti(ctx context.Context, records []dalrecord.Record) error {
@@ -86,7 +95,7 @@ func (r readwriteTx) Delete(ctx context.Context, key *dalrecord.Key) error {
 		return err
 	}
 	// Delete removes only an exact-case match (casefold.go).
-	if err := caseVariantNotFound(r.db.rootDirPath, colDef, recordKey, path); err != nil {
+	if err := r.caseVariantNotFound(colDef, key.Parent(), recordKey, path); err != nil {
 		return err
 	}
 	switch colDef.RecordFile.RecordType {
@@ -149,7 +158,7 @@ func (r readwriteTx) Insert(ctx context.Context, record dalrecord.Record, opts .
 	if err := checkNoCaseCollision(r.db.rootDirPath, colDef, recordKey, path); err != nil {
 		return err
 	}
-	if err := refuseCaseVariant(r.db.rootDirPath, colDef, recordKey, path); err != nil {
+	if err := r.refuseCaseVariant(colDef, record.Key(), recordKey, path); err != nil {
 		return err
 	}
 	switch colDef.RecordFile.RecordType {
@@ -165,7 +174,7 @@ func (r readwriteTx) Insert(ctx context.Context, record dalrecord.Record, opts .
 			return fmt.Errorf("record already exists: %s in %s", recordKey, path)
 		}
 		allRecords[recordKey] = ingitdb.ApplyLocaleToWrite(data, colDef.Columns)
-		return writeMapOfRecordsFile(path, colDef, allRecords)
+		return r.written(path, writeMapOfRecordsFile(path, colDef, allRecords))
 	default:
 		_, statErr := fsys.Stat(path)
 		if statErr == nil {
@@ -175,9 +184,9 @@ func (r readwriteTx) Insert(ctx context.Context, record dalrecord.Record, opts .
 			return fmt.Errorf("failed to check file %s: %w", path, statErr)
 		}
 		if colDef.RecordFile.Format == ingitdb.RecordFormatMarkdown {
-			return writeMarkdownRecord(path, colDef, data)
+			return r.written(path, writeMarkdownRecord(path, colDef, data))
 		}
-		return writeRecordToFile(path, colDef.RecordFile.Format, data)
+		return r.written(path, writeRecordToFile(path, colDef.RecordFile.Format, data))
 	}
 }
 

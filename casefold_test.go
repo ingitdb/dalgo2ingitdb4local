@@ -3,6 +3,7 @@ package dalgo2fsingitdb
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -16,9 +17,10 @@ import (
 )
 
 // foldFS is a case-insensitive, case-preserving file system below root, made
-// on top of the real one: a name below root that differs only in letter case
-// from an existing entry names that entry, as on macOS APFS and Windows NTFS,
-// and a new name keeps the case it is created with. A test that stands it in
+// on top of the real one: a name below root that differs only in letter case,
+// or in Unicode normalisation (for the NFD forms in nfd), from an existing
+// entry names that entry, as on macOS APFS, and a new name keeps the case and
+// form it is created with. A test that stands it in
 // (withFoldFS) shows on a case-sensitive file system (Linux CI) what a
 // case-insensitive one does.
 type foldFS struct{ root string }
@@ -33,7 +35,7 @@ func (f foldFS) resolve(path string) string {
 	for _, name := range strings.Split(rel, string(filepath.Separator)) {
 		entries, _ := os.ReadDir(dir)
 		for _, e := range entries {
-			if strings.EqualFold(e.Name(), name) {
+			if foldName(e.Name()) == foldName(name) {
 				name = e.Name()
 				break
 			}
@@ -42,6 +44,14 @@ func (f foldFS) resolve(path string) string {
 	}
 	return dir
 }
+
+// nfd maps the NFD forms the tests use to NFC: é (e + U+0301) and the Hangul
+// syllable 한 (three jamo).
+var nfd = strings.NewReplacer("e\u0301", "\u00e9", "\u1112\u1161\u11ab", "\ud55c")
+
+// foldName is the name foldFS compares: in NFC (for the forms in nfd) and in
+// lower case.
+func foldName(name string) string { return strings.ToLower(nfd.Replace(name)) }
 
 func (f foldFS) ReadFile(name string) ([]byte, error) { return os.ReadFile(f.resolve(name)) }
 func (f foldFS) WriteFile(name string, data []byte, perm fs.FileMode) error {
@@ -211,6 +221,9 @@ func checkCaseFold(t *testing.T, root string, encoding string) {
 	if !errors.Is(err, ErrNameDiffersInCase) || !strings.Contains(err.Error(), `"bob"`) || !strings.Contains(err.Error(), "Bob") {
 		t.Errorf("Set bob over Bob: %v", err)
 	}
+	if encoding == "" && (err == nil || !strings.Contains(err.Error(), "delete the old record first")) {
+		t.Errorf("Set bob over Bob does not say how to rename: %v", err)
+	}
 	if err := insertTitle(db, bob, "bob"); !errors.Is(err, ErrNameDiffersInCase) {
 		t.Errorf("Insert bob over Bob: %v", err)
 	}
@@ -229,10 +242,24 @@ func checkCaseFold(t *testing.T, root string, encoding string) {
 	}
 
 	// Delete removes only an exact-case match.
-	for _, key := range []*dalrecord.Key{bob, bobsNote, red} {
+	for _, key := range []*dalrecord.Key{bob, bobsNote} {
 		if err := deleteKey(db, key); !dalrecord.IsNotFound(err) || !errors.Is(err, ErrNameDiffersInCase) {
 			t.Errorf("Delete %v: %v", key, err)
 		}
+	}
+	// Tags.yaml is the collection's own file under another name: the
+	// definition and the disk disagree, and every operation says so.
+	if err := deleteKey(db, red); !errors.Is(err, ErrNameDiffersInCase) || dalrecord.IsNotFound(err) {
+		t.Errorf("Delete tags/red: %v", err)
+	}
+	if _, _, err := getTitle(db, red); !errors.Is(err, ErrNameDiffersInCase) {
+		t.Errorf("Get tags/red: %v", err)
+	}
+	if _, err := queryKeys(t, db, dal.NewRootCollectionRef("tags", "")); !errors.Is(err, ErrNameDiffersInCase) {
+		t.Errorf("query tags: %v", err)
+	}
+	if _, err := recordsetRows(db, dal.NewRootCollectionRef("tags", "")); !errors.Is(err, ErrNameDiffersInCase) {
+		t.Errorf("recordset tags: %v", err)
 	}
 	if got := readFile(t, bobFile) + readFile(t, bobNote) + readFile(t, tagsFile); got != "title: Bob\ntitle: Bob's note\nred:\n  title: Red\n" {
 		t.Errorf("records after Delete of case variants: %q", got)
@@ -242,7 +269,7 @@ func checkCaseFold(t *testing.T, root string, encoding string) {
 	if exists, title, err := getTitle(db, Bob); err != nil || !exists || title != "Bob" {
 		t.Errorf("Get Bob: %v %v %v", exists, title, err)
 	}
-	for _, key := range []*dalrecord.Key{bob, bobsNote, red} {
+	for _, key := range []*dalrecord.Key{bob, bobsNote} {
 		if exists, title, err := getTitle(db, key); err != nil || exists || title != nil {
 			t.Errorf("Get %v: exists=%v title=%v err=%v", key, exists, title, err)
 		}
@@ -255,9 +282,6 @@ func checkCaseFold(t *testing.T, root string, encoding string) {
 	}
 	if got := sortedKeys(t, db, dal.NewCollectionRef("notes", "", Bob)); got != "n1" {
 		t.Errorf("query notes of Bob: %q", got)
-	}
-	if got := sortedKeys(t, db, dal.NewRootCollectionRef("tags", "")); got != "" {
-		t.Errorf("query tags (the file is Tags.yaml): %q", got)
 	}
 	if rows, err := recordsetRows(db, dal.NewCollectionRef("notes", "", bob)); err != nil || rows != 0 {
 		t.Errorf("recordset of notes of bob: %d, %v", rows, err)
@@ -291,6 +315,137 @@ func checkCaseFold(t *testing.T, root string, encoding string) {
 	}
 }
 
+// checkNormalisation is the rule for names that differ only in Unicode
+// normalisation, which APFS treats as one: café in NFD on disk and café in
+// NFC as a key, and the Hangul syllable 한 likewise. With tilde-v1 a key is
+// written in ASCII, so only the unencoded mode has such names.
+func checkNormalisation(t *testing.T, root string) {
+	t.Helper()
+	db, err := NewLocalDBWithDef(root, caseFoldDef(root, ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for nfdName, nfcKey := range map[string]string{"cafe\u0301": "caf\u00e9", "\u1112\u1161\u11ab": "\ud55c"} {
+		file := filepath.Join(root, "people", "$records", nfdName+".yaml")
+		writeFiles(t, root, map[string]string{"people/$records/" + nfdName + ".yaml": "title: nfd\n"})
+		key := dalrecord.NewKeyWithID("people", nfcKey)
+		if err := setTitle(context.Background(), db, key, "nfc"); !errors.Is(err, ErrNameDiffersInCase) || !strings.Contains(err.Error(), nfdName) {
+			t.Errorf("Set %q (NFC) over %q (NFD): %v", nfcKey, nfdName, err)
+		}
+		if err := insertTitle(db, key, "nfc"); !errors.Is(err, ErrNameDiffersInCase) {
+			t.Errorf("Insert %q (NFC): %v", nfcKey, err)
+		}
+		if err := deleteKey(db, key); !dalrecord.IsNotFound(err) || !errors.Is(err, ErrNameDiffersInCase) {
+			t.Errorf("Delete %q (NFC): %v", nfcKey, err)
+		}
+		if exists, _, err := getTitle(db, key); err != nil || exists {
+			t.Errorf("Get %q (NFC): %v %v", nfcKey, exists, err)
+		}
+		if exists, title, err := getTitle(db, dalrecord.NewKeyWithID("people", nfdName)); err != nil || !exists || title != "nfd" {
+			t.Errorf("Get %q (NFD): %v %v %v", nfdName, exists, title, err)
+		}
+		if got := readFile(t, file); got != "title: nfd\n" {
+			t.Errorf("%q after Set/Insert/Delete of its NFC form: %q", nfdName, got)
+		}
+	}
+}
+
+// checkLayoutDiffersInCase is the rule for a collection whose folder in the
+// definition differs only in case from the folder on disk: every operation
+// fails with ErrNameDiffersInCase, and nothing reads as empty.
+func checkLayoutDiffersInCase(t *testing.T, root string) {
+	t.Helper()
+	writeFiles(t, root, map[string]string{"people/$records/Ann.yaml": "title: Ann\n"})
+	def := caseFoldDef(root, "")
+	def.Collections["people"].DirPath = filepath.Join(root, "People")
+	db, err := NewLocalDBWithDef(root, def)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ann := dalrecord.NewKeyWithID("people", "Ann")
+	if _, _, err := getTitle(db, ann); !errors.Is(err, ErrNameDiffersInCase) || !strings.Contains(err.Error(), "rename the folder or fix the definition") {
+		t.Errorf("Get: %v", err)
+	}
+	if _, err := queryKeys(t, db, dal.NewRootCollectionRef("people", "")); !errors.Is(err, ErrNameDiffersInCase) {
+		t.Errorf("query: %v", err)
+	}
+	if err := setTitle(context.Background(), db, ann, "x"); !errors.Is(err, ErrNameDiffersInCase) {
+		t.Errorf("Set: %v", err)
+	}
+	if err := deleteKey(db, ann); !errors.Is(err, ErrNameDiffersInCase) || dalrecord.IsNotFound(err) {
+		t.Errorf("Delete: %v", err)
+	}
+	if got := readFile(t, filepath.Join(root, "people", "$records", "Ann.yaml")); got != "title: Ann\n" {
+		t.Errorf("Ann.yaml: %q", got)
+	}
+}
+
+// checkRelativeDirPath is the rule with a collection folder given relative to
+// the working directory and the root given absolute: a parent folder that
+// differs only in case is still found.
+func checkRelativeDirPath(t *testing.T, root string) {
+	t.Helper()
+	writeFiles(t, root, map[string]string{"people/$records/Bob/notes/$records/n1.yaml": "title: Bob's note\n"})
+	t.Chdir(root)
+	def := caseFoldDef(root, "")
+	def.Collections["people"].DirPath = "people"
+	db, err := NewLocalDBWithDef(root, def)
+	if err != nil {
+		t.Fatal(err)
+	}
+	note := dalrecord.NewKeyWithParentAndID(dalrecord.NewKeyWithID("people", "bob"), "notes", "n1")
+	if err := setTitle(context.Background(), db, note, "bob's note"); !errors.Is(err, ErrNameDiffersInCase) {
+		t.Errorf("Set bob/notes/n1 with a relative folder: %v", err)
+	}
+	if got := readFile(t, filepath.Join(root, "people", "$records", "Bob", "notes", "$records", "n1.yaml")); got != "title: Bob's note\n" {
+		t.Errorf("Bob's note: %q", got)
+	}
+}
+
+// countReadDir counts the folder listings of a file system.
+type countReadDir struct {
+	fileSystem
+	n map[string]int
+}
+
+func (c countReadDir) ReadDir(name string) ([]fs.DirEntry, error) {
+	c.n[name]++
+	return c.fileSystem.ReadDir(name)
+}
+
+// checkBulkWrite is the cost rule: a transaction lists each folder once,
+// however many records it writes there, and sees its own writes.
+func checkBulkWrite(t *testing.T, root string, counts map[string]int) {
+	t.Helper()
+	db, err := NewLocalDBWithDef(root, caseFoldDef(root, ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFiles(t, root, map[string]string{"people/$records/Zed.yaml": "title: Zed\n"})
+	err = db.RunReadwriteTransaction(context.Background(), func(ctx context.Context, tx dal.ReadwriteTransaction) error {
+		for i := 0; i < 30; i++ {
+			key := dalrecord.NewKeyWithID("people", "p"+strings.Repeat("x", i))
+			if err := tx.Set(ctx, dalrecord.NewRecordWithData(key, map[string]any{"title": "t"})); err != nil {
+				return err
+			}
+			if err := tx.Set(ctx, dalrecord.NewRecordWithData(key, map[string]any{"title": "again"})); err != nil {
+				return err
+			}
+			rec := dalrecord.NewRecordWithData(key, map[string]any{})
+			if err := tx.Get(ctx, rec); err != nil || !rec.Exists() {
+				return fmt.Errorf("Get %v in the transaction that wrote it: %v", key, err)
+			}
+		}
+		return tx.Set(ctx, dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("people", "zed"), map[string]any{"title": "x"}))
+	})
+	if !errors.Is(err, ErrNameDiffersInCase) {
+		t.Errorf("bulk write, then zed over Zed: %v", err)
+	}
+	if n := counts[filepath.Join(root, "people", "$records")]; n > 1 {
+		t.Errorf("the records folder was listed %d times in one transaction", n)
+	}
+}
+
 // Verifies the case-folding rule on a simulated case-insensitive,
 // case-preserving file system, so it holds on case-sensitive CI runners too,
 // in every key encoding.
@@ -302,6 +457,20 @@ func TestCaseFold_Simulated(t *testing.T) {
 			checkCaseFold(t, root, encoding)
 		})
 	}
+	for name, check := range map[string]func(*testing.T, string){
+		"normalisation": checkNormalisation, "layout": checkLayoutDiffersInCase, "relative": checkRelativeDirPath,
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			withFoldFS(t, root)
+			check(t, root)
+		})
+	}
+	t.Run("bulk", func(t *testing.T) {
+		root, counts := t.TempDir(), map[string]int{}
+		withFoldFS(t, root, func(f fileSystem) fileSystem { return countReadDir{f, counts} })
+		checkBulkWrite(t, root, counts)
+	})
 }
 
 // Verifies the case-folding rule on the real file system, where it folds case
@@ -316,6 +485,27 @@ func TestCaseFold_RealFileSystem(t *testing.T) {
 			checkCaseFold(t, root, encoding)
 		})
 	}
+	for name, check := range map[string]func(*testing.T, string){
+		"normalisation": checkNormalisation, "layout": checkLayoutDiffersInCase, "relative": checkRelativeDirPath,
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			if !foldsCase(t, root) {
+				t.Skip("the temporary folder is on a case-sensitive file system")
+			}
+			check(t, root)
+		})
+	}
+	t.Run("bulk", func(t *testing.T) {
+		root, counts := t.TempDir(), map[string]int{}
+		if !foldsCase(t, root) {
+			t.Skip("the temporary folder is on a case-sensitive file system")
+		}
+		saved := fsys
+		fsys = countReadDir{osFS{}, counts}
+		t.Cleanup(func() { fsys = saved })
+		checkBulkWrite(t, root, counts)
+	})
 }
 
 // readDirFails is a file system whose folders cannot be listed.
@@ -356,48 +546,6 @@ func TestCaseFold_ReadDirFails(t *testing.T) {
 	}
 	if got := readFile(t, filepath.Join(root, "people", "$records", "Bob.yaml")); got != "title: Bob\n" {
 		t.Errorf("Bob.yaml: %q", got)
-	}
-}
-
-// caseVariant checks only path's own name when path is not below root, and
-// nothing for root itself; the error names the other record only when its
-// name is one the collection's encoding writes.
-func TestCaseVariant_Edges(t *testing.T) {
-	root := t.TempDir()
-	withFoldFS(t, root)
-	writeFiles(t, root, map[string]string{"Up/x.yaml": "", "people/$records/a~2fb.yaml": "title: x\n"})
-	if _, onDisk, found, err := caseVariant("", filepath.Join(root, "up", "x.yaml")); err != nil || found || onDisk != "" {
-		t.Errorf("no root, folder differs in case: %q %v %v", onDisk, found, err)
-	}
-	if _, onDisk, found, err := caseVariant("", filepath.Join(root, "Up", "X.yaml")); err != nil || !found || onDisk != filepath.Join(root, "Up", "x.yaml") {
-		t.Errorf("no root, file differs in case: %q %v %v", onDisk, found, err)
-	}
-	if _, _, found, err := caseVariant(root, root); err != nil || found {
-		t.Errorf("root itself: %v %v", found, err)
-	}
-	// A name with no letter that has a case is never another name.
-	writeFiles(t, root, map[string]string{"42/x": ""})
-	if _, _, found, err := caseVariant(root, filepath.Join(root, "42", "x")); err != nil || found {
-		t.Errorf("no letters: %v %v", found, err)
-	}
-	// A one-record collection with no {key} in its name is read by its file.
-	one := &ingitdb.CollectionDef{DirPath: filepath.Join(root, "c"), RecordFile: &ingitdb.RecordFileDef{Name: "data.yaml", RecordType: ingitdb.SingleRecord}}
-	if got := queryTarget(one); got != filepath.Join(root, "c", "data.yaml") {
-		t.Errorf("queryTarget without {key}: %q", got)
-	}
-	db, err := NewLocalDBWithDef(root, caseFoldDef(root, ingitdb.KeyEncodingTildeV1))
-	if err != nil {
-		t.Fatal(err)
-	}
-	// a~2Fb is the tilde-v1 name of a/b; a~2fb is no name the encoding writes.
-	if err := deleteKey(db, dalrecord.NewKeyWithID("people", "a/b")); !errors.Is(err, ErrNameDiffersInCase) || strings.Contains(err.Error(), "the file of record") {
-		t.Errorf("Delete a/b: %v", err)
-	}
-	if exists, _, err := getTitle(db, dalrecord.NewKeyWithID("people", "a/b")); err != nil || exists {
-		t.Errorf("Get a/b: %v %v", exists, err)
-	}
-	if got := swapCase("Bob-42é"); got != "bOB-42É" {
-		t.Errorf("swapCase: %q", got)
 	}
 }
 

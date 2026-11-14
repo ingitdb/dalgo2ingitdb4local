@@ -29,9 +29,10 @@ func executeQueryToRecordsReader(ctx context.Context, r readonlyTx, query dal.Qu
 	// collectionFromQuery already validated that query is a StructuredQuery.
 	sq, _ := query.(dal.StructuredQuery)
 
-	// A folder or file under a name that differs only in case holds another
-	// record's data (casefold.go): Get finds no record there, nor does a query.
-	variant, err := queryReadsCaseVariant(r.db.rootDirPath, colDef)
+	// A parent record's folder under another name the file system treats as
+	// the same holds another record's data (casefold.go): Get finds no record
+	// there, nor does a query.
+	variant, err := r.queryReadsCaseVariant(colDef, query)
 	if err != nil {
 		return nil, err
 	}
