@@ -47,22 +47,45 @@ import (
 // and NFD names as one, and case-sensitive folders on Windows, exist.
 //
 // The listings are read once per transaction (dirCache) and updated by the
-// transaction's own writes and deletes. A bulk write of N records into one
+// transaction's own writes and deletes, in every listing of the same folder:
+// two collections can reach one folder by different paths (a symlink), and a
+// delete through one must not leave the other's listing showing the name. A bulk write of N records into one
 // folder lists that folder once, not N times. The driver is not safe for
 // concurrent use, and that holds across processes too: a name another
 // process deletes and re-creates under another name during a transaction is
 // still taken, for the rest of the transaction, to be the name it listed.
 
 // dirCache holds the names in each folder a transaction has listed, keyed by
-// the folder's absolute path, and whether each folder it asked holds names
-// exactly. A nil dirCache lists and asks every time.
+// the folder's absolute path, the folder itself (to find the other paths that
+// reach it), and whether each folder it asked holds names exactly. A nil
+// dirCache lists and asks every time.
 type dirCache struct {
 	names map[string]map[string]bool
+	dirs  map[string]os.FileInfo
 	exact map[string]bool
 }
 
 func newDirCache() *dirCache {
-	return &dirCache{names: make(map[string]map[string]bool), exact: make(map[string]bool)}
+	return &dirCache{names: make(map[string]map[string]bool), dirs: make(map[string]os.FileInfo), exact: make(map[string]bool)}
+}
+
+// listings is every listing the cache holds of the folder dir, under
+// whichever path it was listed by.
+func (c *dirCache) listings(dir string) []map[string]bool {
+	var found []map[string]bool
+	if names, ok := c.names[dir]; ok {
+		found = append(found, names)
+	}
+	info, err := fsys.Stat(dir)
+	if err != nil {
+		return found
+	}
+	for listed, other := range c.dirs {
+		if listed != dir && os.SameFile(info, other) {
+			found = append(found, c.names[listed])
+		}
+	}
+	return found
 }
 
 // exactNames reports whether dir holds every name exactly as it is given
@@ -97,6 +120,9 @@ func (c *dirCache) list(dir string) (map[string]bool, error) {
 	}
 	if c != nil {
 		c.names[dir] = names
+		if info, err := fsys.Stat(dir); err == nil {
+			c.dirs[dir] = info
+		}
 	}
 	return names, nil
 }
@@ -108,22 +134,21 @@ func (c *dirCache) wrote(path string) {
 		return
 	}
 	for p := absPath(path); filepath.Dir(p) != p; p = filepath.Dir(p) {
-		if names, ok := c.names[filepath.Dir(p)]; ok {
+		for _, names := range c.listings(filepath.Dir(p)) {
 			names[filepath.Base(p)] = true
 		}
 	}
 }
 
 // failed records that a write of path failed. It may have made some of the
-// folders on path, or the file, before it failed, so the listing of every
-// folder on path is read again when it is next needed.
-func (c *dirCache) failed(path string) {
+// folders on path, or the file, before it failed, and another path may reach
+// any of them, so every folder is listed again when it is next needed.
+func (c *dirCache) failed(string) {
 	if c == nil {
 		return
 	}
-	for p := absPath(path); filepath.Dir(p) != p; p = filepath.Dir(p) {
-		delete(c.names, filepath.Dir(p))
-	}
+	clear(c.names)
+	clear(c.dirs)
 }
 
 // removed records that path, which a transaction deleted, is no longer in its
@@ -133,7 +158,9 @@ func (c *dirCache) removed(path string) {
 		return
 	}
 	p := absPath(path)
-	delete(c.names[filepath.Dir(p)], filepath.Base(p))
+	for _, names := range c.listings(filepath.Dir(p)) {
+		delete(names, filepath.Base(p))
+	}
 }
 
 // absPath is p made absolute, so a relative and an absolute path compare.
@@ -162,15 +189,17 @@ func (m *sameName) shownOnDisk() string {
 
 // caseVariant reports the first entry on path, below root, that exists on
 // disk under another name the file system treats as the same, or nil. With
-// path not below root, only path's own name is checked. A missing entry ends
-// the check: there is nothing on disk to mistake path for.
+// no root, or path not below it, every entry on path is checked from the
+// volume's root: a parent record's folder above the file is never skipped.
+// A missing entry ends the check: there is nothing on disk to mistake path
+// for.
 func caseVariant(cache *dirCache, root, path string) (*sameName, error) {
 	path = absPath(path)
-	dir, rel := filepath.Dir(path), filepath.Base(path)
+	dir := filepath.VolumeName(path) + string(filepath.Separator)
 	if root != "" && within(absPath(root), path) {
 		dir = absPath(root)
-		rel, _ = filepath.Rel(dir, path) // within proved it relative
 	}
+	rel, _ := filepath.Rel(dir, path) // path is below dir
 	if rel == "." {
 		return nil, nil
 	}
@@ -277,11 +306,27 @@ func otherRecord(colDef *ingitdb.CollectionDef, k keyNames, m *sameName) string 
 	return fmt.Sprintf(" (the file of record %+q)", key)
 }
 
+// checkRoot is the folder below which caseVariant checks path: the database's
+// root when path is below it, or else the folder of the outermost collection
+// on path, so that every parent record's folder is checked whatever the root.
+// When neither holds path, caseVariant checks from the volume's root.
+func checkRoot(def *ingitdb.Definition, colDef *ingitdb.CollectionDef, parent *dalrecord.Key, root, path string) string {
+	if root != "" && within(absPath(root), absPath(path)) {
+		return root
+	}
+	top := colDef
+	for p := parent; p != nil; p = p.Parent() {
+		// The record's own resolution succeeded, so each ancestor resolves.
+		top, _ = resolveScopedCollection(def, p.Collection(), p.Parent())
+	}
+	return filepath.Dir(absPath(top.DirPath))
+}
+
 // recordCaseVariant is the name on recordKey's path, at path, that is on
 // disk under another name, with the keyNames of the path; nil when there is
 // none. A layout folder under another name is an error.
 func (r readonlyTx) recordCaseVariant(colDef *ingitdb.CollectionDef, parent *dalrecord.Key, path string) (*sameName, keyNames, error) {
-	m, err := caseVariant(r.names, r.db.rootDirPath, path)
+	m, err := caseVariant(r.names, checkRoot(r.db.def, colDef, parent, r.db.rootDirPath, path), path)
 	if err != nil || m == nil {
 		return nil, keyNames{}, err
 	}

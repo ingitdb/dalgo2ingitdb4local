@@ -11,14 +11,14 @@ import (
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
-// caseVariant checks only path's own name when path is not below root, and
-// nothing for root itself; the error names the other record only when its
-// name is one the collection's encoding writes.
+// caseVariant checks every entry on path from the volume's root when path is
+// not below root, and nothing for root itself; the error names the other
+// record only when its name is one the collection's encoding writes.
 func TestCaseVariant_Edges(t *testing.T) {
 	root := t.TempDir()
 	withFoldFS(t, root)
 	writeFiles(t, root, map[string]string{"Up/x.yaml": "", "people/$records/a~2fb.yaml": "title: x\n"})
-	if m, err := caseVariant(nil, "", filepath.Join(root, "up", "x.yaml")); err != nil || m != nil {
+	if m, err := caseVariant(nil, "", filepath.Join(root, "up", "x.yaml")); err != nil || m == nil || m.given != filepath.Join(root, "up") {
 		t.Errorf("no root, folder differs in case: %+v %v", m, err)
 	}
 	if m, err := caseVariant(nil, "", filepath.Join(root, "Up", "X.yaml")); err != nil || m == nil || m.onDisk != filepath.Join(root, "Up", "x.yaml") {
