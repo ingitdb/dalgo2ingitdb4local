@@ -1,6 +1,116 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
+    "config:recommended",
+    ":semanticCommits"
+  ],
+  "dependencyDashboard": true,
+  "prConcurrentLimit": 3,
+  "branchConcurrentLimit": 3,
+  "prHourlyLimit": 2,
+  "automerge": false,
+  "automergeType": "pr",
+  "platformAutomerge": true,
+  "rebaseWhen": "behind-base-branch",
+  "packageRules": [
+    {
+      "description": "Group compatible Go module dependency updates",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchDatasources": [
+        "go"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "Go dependency updates"
+    },
+    {
+      "description": "Batch low-risk Go test updates behind the required checks",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchPackageNames": [
+        "github.com/DATA-DOG/go-sqlmock",
+        "github.com/stretchr/testify"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "Go test dependencies",
+      "automerge": true
+    },
+    {
+      "description": "Keep the first-party reusable CI workflow pinned to a commit SHA",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchDepTypes": [
+        "action"
+      ],
+      "matchPackageNames": [
+        "strongo/cicd"
+      ],
+      "matchFileNames": [
+        ".github/workflows/ci.yml"
+      ],
+      "pinDigests": true
+    },
+    {
+      "description": "Automerge SHA-pinned patches of the first-party reusable CI workflow",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchDepTypes": [
+        "action"
+      ],
+      "matchPackageNames": [
+        "strongo/cicd"
+      ],
+      "matchFileNames": [
+        ".github/workflows/ci.yml"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "automerge": true
+    },
+    {
+      "description": "Automerge official Go toolchain patches",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchDatasources": [
+        "golang-version"
+      ],
+      "matchDepTypes": [
+        "toolchain"
+      ],
+      "matchPackageNames": [
+        "go"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "automerge": true
+    },
+    {
+      "description": "Review major changes in the dashboard before opening a PR",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true,
+      "automerge": false
+    },
+    {
+      "description": "Keep TypeScript below 7",
+      "matchPackageNames": [
+        "typescript"
+      ],
+      "allowedVersions": "<7"
+    }
   ]
 }
