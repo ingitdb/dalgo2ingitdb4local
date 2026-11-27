@@ -44,12 +44,28 @@
       "automerge": true
     },
     {
+      "description": "Keep the first-party reusable CI workflow pinned to a commit SHA",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchDepTypes": [
+        "action"
+      ],
+      "matchPackageNames": [
+        "strongo/cicd"
+      ],
+      "matchFileNames": [
+        ".github/workflows/ci.yml"
+      ],
+      "pinDigests": true
+    },
+    {
       "description": "Automerge SHA-pinned patches of the first-party reusable CI workflow",
       "matchManagers": [
         "github-actions"
       ],
       "matchDepTypes": [
-        "workflow"
+        "action"
       ],
       "matchPackageNames": [
         "strongo/cicd"
@@ -60,7 +76,6 @@
       "matchUpdateTypes": [
         "patch"
       ],
-      "pinDigests": true,
       "automerge": true
     },
     {
