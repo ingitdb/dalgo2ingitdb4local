@@ -4,9 +4,7 @@
     "config:recommended",
     ":semanticCommits"
   ],
-  "dependencyDashboard": {
-    "enabled": true
-  },
+  "dependencyDashboard": true,
   "prConcurrentLimit": 3,
   "branchConcurrentLimit": 3,
   "prHourlyLimit": 2,
